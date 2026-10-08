@@ -55,12 +55,45 @@ run_step() {
 }
 
 download_archive() {
-    local url="$1" output="$2"
+    local url="$1" output="$2" headers="${2}.headers.$$" errors="${2}.errors.$$"
+    local curl_pid status=0 downloaded total percent filled empty bar label elapsed frames=( '|' '/' '-' '\' ) frame=0
+    local download_started=$SECONDS
     if [[ -t 1 ]]; then
-        curl --fail --location --show-error --progress-bar --connect-timeout 10 --retry 3 --retry-delay 1 "$url" -o "$output"
+        curl --fail --location --show-error --silent --connect-timeout 10 --retry 3 --retry-delay 1 \
+            --dump-header "$headers" --stderr "$errors" "$url" -o "$output" &
+        curl_pid=$!
+        while kill -0 "$curl_pid" 2>/dev/null; do
+            elapsed=$((SECONDS - download_started))
+            label='Downloading'
+            ((elapsed >= 15)) && label='Still downloading'
+            downloaded="$(stat -c '%s' "$output" 2>/dev/null || printf 0)"
+            total="$(awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }' "$headers" 2>/dev/null || printf 0)"
+            if ((total > 0)); then
+                percent=$((downloaded * 100 / total))
+                ((percent > 100)) && percent=100
+                filled=$((percent * 28 / 100))
+                printf -v bar '%*s' "$filled" ''; bar=${bar// /#}
+                empty=$((28 - filled))
+                printf -v empty '%*s' "$empty" ''; empty=${empty// /-}
+                printf '\r%s [%s%s] %3d%% (%s/%s MB)' "$label" "$bar" "$empty" "$percent" \
+                    "$(awk -v n="$downloaded" 'BEGIN { printf "%.1f", n / 1048576 }')" \
+                    "$(awk -v n="$total" 'BEGIN { printf "%.1f", n / 1048576 }')"
+            else
+                printf '\r%s %s (%s MB received)' "$label" "${frames[$((frame % ${#frames[@]}))]}" \
+                    "$(awk -v n="$downloaded" 'BEGIN { printf "%.1f", n / 1048576 }')"
+                frame=$((frame + 1))
+            fi
+            sleep 0.25
+        done
+        wait "$curl_pid" || status=$?
+        printf '\n'
     else
-        curl --fail --location --show-error --silent --connect-timeout 10 --retry 3 --retry-delay 1 "$url" -o "$output"
+        curl --fail --location --show-error --silent --connect-timeout 10 --retry 3 --retry-delay 1 \
+            --stderr "$errors" "$url" -o "$output" || status=$?
     fi
+    if ((status != 0)) && [[ -s "$errors" ]]; then cat "$errors" >&2; fi
+    rm -f -- "$headers" "$errors"
+    return "$status"
 }
 
 RAW_SLUG="${REPO_SLUG:-Mustafa2624/serpantinum-plus}"
