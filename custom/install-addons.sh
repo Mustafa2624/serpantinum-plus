@@ -80,12 +80,11 @@ download_archive() {
 
 usage() {
     cat <<'USAGE'
-Usage: bash custom/install-addons.sh [--yes] [--dry-run] [--uninstall] [--no-restart]
+Usage: bash custom/install-addons.sh [--yes] [--dry-run] [--no-restart]
 
 Options:
   --yes          Skip the confirmation prompt.
   --dry-run      Check compatibility and summarize changes without writing.
-  --uninstall   Restore the files saved by the last successful add-on install.
   --no-restart  Do not stop and start serpantinumd after changes.
   --help         Show this help.
 
@@ -106,7 +105,6 @@ while (($#)); do
     case "$1" in
         --yes) yes=true ;;
         --dry-run) [[ "$mode" == install ]] || { usage >&2; exit 2; }; mode=dry-run ;;
-        --uninstall) [[ "$mode" == install ]] || { usage >&2; exit 2; }; mode=uninstall ;;
         --no-restart) no_restart=true ;;
         --help) usage; exit 0 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -131,7 +129,7 @@ check_target() {
     }
 }
 if [[ "${SERPANTINUM_ADDONS_BOOTSTRAPPED:-0}" != 1 ]]; then
-    run_step 'Checking your Serpantinum install...' 'No files were changed.' 'Still checking...' check_target
+    run_step 'Checking your Serpantinum install...' 'No files were changed.' 'Checking...' check_target
 fi
 
 if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" ]]; then
@@ -148,7 +146,7 @@ if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" 
         mkdir -p "$bootstrap_dir/extracted" || return 1
         tar -xzf "$bootstrap_dir/repo.tar.gz" --strip-components=1 -C "$bootstrap_dir/extracted"
     }
-    run_step 'Unpacking...' 'Nothing was changed.' 'Still unpacking...' unpack_bootstrap
+    run_step 'Unpacking...' 'Nothing was changed.' 'Unpacking...' unpack_bootstrap
     if [[ ! -f "$bootstrap_dir/extracted/custom/patches/addons.patch" ]]; then
         printf 'Step 3 failed: archive is missing add-on installer files. Nothing was changed.\n' >&2
         exit 1
@@ -158,8 +156,8 @@ if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" 
 fi
 
 if [[ "${SERPANTINUM_ADDONS_BOOTSTRAPPED:-0}" != 1 ]]; then
-    run_step 'Using the local Serpantinum Plus checkout...' 'Nothing was changed.' 'Still checking...' true
-    run_step 'Unpacking... not needed for a local checkout.' 'Nothing was changed.' 'Still checking...' true
+    run_step 'Using the local Serpantinum Plus checkout...' 'Nothing was changed.' 'Checking...' true
+    run_step 'Unpacking... not needed for a local checkout.' 'Nothing was changed.' 'Checking...' true
 fi
 
 patch_file="$source_dir/patches/addons.patch"
@@ -199,57 +197,6 @@ restart_shell() {
     "$daemon" start
 }
 
-if [[ "$mode" == uninstall ]]; then
-    if [[ ! -f "$active_file" ]]; then
-        run_step 'Checking what will be restored...' 'Nothing was changed.' 'Still checking...' true
-        printf 'No managed add-on installation is recorded; nothing to uninstall.\n'
-        exit 0
-    fi
-    backup_dir="$(<"$active_file")"
-    manifest="$backup_dir/manifest.tsv"
-    # shellcheck disable=SC2329
-    validate_uninstall() {
-        [[ -d "$backup_dir" && -f "$backup_dir/install-dir" && "$(<"$backup_dir/install-dir")" == "$install_dir" ]] || {
-            printf 'The recorded backup does not belong to %s, or its metadata is missing.\n' "$install_dir" >&2
-            return 1
-        }
-        [[ -f "$manifest" ]] || { printf 'Backup manifest missing: %s\n' "$manifest" >&2; return 1; }
-        local had rel
-        while IFS=$'\t' read -r had rel; do
-            [[ "$rel" == src/* ]] || { printf 'Unsafe backup path: %s\n' "$rel" >&2; return 1; }
-            if [[ "$had" == present && ! -e "$backup_dir/files/$rel" ]]; then
-                printf 'Backup file missing: %s\n' "$backup_dir/files/$rel" >&2
-                return 1
-            fi
-        done < "$manifest"
-    }
-    run_step 'Checking what will be restored...' 'No files were changed.' 'Still checking the backup...' validate_uninstall
-    printf 'Files to restore:\n'
-    while IFS=$'\t' read -r had_original rel; do printf '  %s %s\n' "$([[ "$had_original" == present ]] && printf 'RESTORE' || printf 'REMOVE ')" "$rel"; done < "$manifest"
-    if [[ "$yes" != true ]]; then
-        read -r -p 'Uninstall Serpantinum Plus add-ons and restore the backup? [y/N] ' answer </dev/tty || answer=""
-        [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]] || { printf 'Cancelled.\n'; exit 0; }
-    fi
-    # shellcheck disable=SC2329
-    restore_backup() {
-        local had_original rel
-        while IFS=$'\t' read -r had_original rel; do
-            if [[ "$had_original" == present ]]; then
-                mkdir -p -- "$install_dir/$(dirname -- "$rel")" || return 1
-                cp -a -- "$backup_dir/files/$rel" "$install_dir/$rel" || return 1
-            else
-                rm -f -- "$install_dir/$rel" || return 1
-            fi
-        done < "$manifest"
-        rm -f -- "$active_file"
-    }
-    run_step 'Restoring the backup...' 'Restore stopped early; the backup is still at the path above.' 'Still restoring...' restore_backup
-    printf 'Add-ons removed; restored files from %s.\n' "$backup_dir"
-    run_step 'Restarting the shell...' 'Files are restored; restart the shell manually.' 'Still restarting...' restart_shell
-    printf 'Uninstall complete. Backup retained at %s. Total time: %.1fs\n' "$backup_dir" "$(awk "BEGIN {print $(elapsed_ms "$run_started_ms") / 1000}")"
-    exit 0
-fi
-
 is_complete() {
     local file
     grep -Fq 'faces/music/MusicFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
@@ -287,7 +234,7 @@ show_group() {
             # shellcheck disable=SC2053
             if [[ "$rel" == $pattern ]]; then
                 if [[ -f "$install_dir/$rel" ]] && cmp -s "$install_dir/$rel" "$overlay_dir/$rel"; then
-                    printf '  REUSE %s (already matches the add-on; uninstall removes it)\n' "$rel"
+                    printf '  REUSE %s (already matches the add-on)\n' "$rel"
                 elif [[ -e "$install_dir/$rel" || -L "$install_dir/$rel" ]]; then
                     printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
                 else
@@ -352,12 +299,12 @@ check_changes() {
 }
 
 if is_complete; then
-    run_step 'Checking what will change...' 'No files were changed.' 'Still checking...' true
+    run_step 'Checking what will change...' 'No files were changed.' 'Checking...' true
     printf 'Serpantinum Plus additions are already present; nothing to do.\n'
     report_dependencies
     exit 0
 fi
-run_step 'Checking what will change...' 'No files were changed.' 'Still checking...' check_changes
+run_step 'Checking what will change...' 'No files were changed.' 'Checking...' check_changes
 backup_dir="$state_root/backups/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 printf 'If you continue, the backup will be saved to: %s\n' "$backup_dir"
 show_file_plan
@@ -466,6 +413,6 @@ perform_install() {
     report_dependencies
 }
 
-run_step "Applying changes (backup: $backup_dir)..." 'Backup restored; see error above.' 'Still applying...' perform_install
-run_step 'Restarting the shell...' 'Changes are installed; restart the shell manually.' 'Still restarting...' restart_shell
-printf 'Complete. Added/updated the listed files. Backup: %s\nUndo with: bash custom/install-addons.sh --uninstall\nTotal time: %.1fs\n' "$backup_dir" "$(awk "BEGIN {print $(elapsed_ms "$run_started_ms") / 1000}")"
+run_step "Applying changes (backup: $backup_dir)..." 'Backup restored; see error above.' 'Applying...' perform_install
+run_step 'Restarting the shell...' 'Changes are installed; restart the shell manually.' 'Restarting...' restart_shell
+printf 'Complete. Added/updated the listed files. Backup: %s\nTotal time: %.1fs\n' "$backup_dir" "$(awk "BEGIN {print $(elapsed_ms "$run_started_ms") / 1000}")"

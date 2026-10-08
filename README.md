@@ -18,8 +18,7 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/custom/install-addons.sh)
 ```
 
-**Update:** run the same add-ons command again after updating Serpantinum.
-**Remove my modules:** add `--uninstall` to the add-ons command.
+**Update:** after an official Serpantinum update, rerun this script to add the custom modules again.
 
 <details>
 <summary>Prefer to read the script first?</summary>
