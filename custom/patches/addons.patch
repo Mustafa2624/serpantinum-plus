@@ -1,0 +1,36 @@
+--- a/src/quickshell/bar/BarModuleRegistry.qml
++++ b/src/quickshell/bar/BarModuleRegistry.qml
+@@ -21,0 +22,21 @@
++        "music": {
++            name: "music",
++            icon: "",
++            defaultVariant: "default",
++            horizontalFace: "faces/music/MusicFace.qml",
++            verticalFace: "faces/music/SideMusicFace.qml"
++        },
++        "expose": {
++            name: "expose",
++            icon: "",
++            defaultVariant: "default",
++            horizontalFace: "faces/expose/ExposeFace.qml",
++            verticalFace: "faces/expose/ExposeFace.qml"
++        },
++        "ytdl": {
++            name: "ytdl",
++            icon: "",
++            defaultVariant: "default",
++            horizontalFace: "faces/ytdl/YtdlFace.qml",
++            verticalFace: "faces/ytdl/YtdlFace.qml"
++        },
+--- a/src/quickshell/bar/qmldir
++++ b/src/quickshell/bar/qmldir
+@@ -6,0 +7 @@
++singleton ExposeState 1.0 ExposeState.qml
+--- a/src/quickshell/quickactions/Floating.qml
++++ b/src/quickshell/quickactions/Floating.qml
+@@ -242 +242,4 @@
+-                "actions/Timer.qml"
++                "actions/Timer.qml",
++                "actions/Game.qml",
++                "actions/DropShelf.qml",
++                "actions/Music.qml"
