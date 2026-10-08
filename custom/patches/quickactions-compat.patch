@@ -1,0 +1,68 @@
+--- a/src/quickshell/bar/BarModuleRegistry.qml
++++ b/src/quickshell/bar/BarModuleRegistry.qml
+@@ -11,6 +11,7 @@
+         let s = String(id).toLowerCase().trim();
+         if (s === "timedate" || s === "time" || s === "clock") return "timedate";
+         if (s === "info" || s === "indicator" || s === "indicators" || s === "record") return "info";
++        if (s === "sysinfo" || s === "systeminfo") return "sysmon";
+         if (s === "volume" || s === "vol") return "vol";
+         if (s === "battery" || s === "bat") return "bat";
+         if (s === "visualizer" || s === "viswidget" || s === "vis") return "vis";
+--- a/src/quickshell/quickactions/Floating.qml
++++ b/src/quickshell/quickactions/Floating.qml
+@@ -249,6 +249,22 @@
+ 
+             Connections {
+                 target: FloatingController
++                function onQuickactionRequested(screen, action) {
++                    if (!floatingWidget.matchesScreen(screen)) return;
++                    if (action === "toggle") {
++                        if (floatingWidget.isSidebarVisible) {
++                            floatingWidget.isSidebarVisible = false;
++                            floatingWidget.isExpanded = false;
++                        } else {
++                            floatingWidget.showSidebar(floatingWidget.activeEdge, floatingWidget.currentPos, false);
++                        }
++                    } else if (action === "expand" || action === "collapse") {
++                        if (!floatingWidget.isSidebarVisible) floatingWidget.showSidebar(floatingWidget.activeEdge, floatingWidget.currentPos, action === "expand");
++                        else floatingWidget.isExpanded = action === "expand";
++                    } else if (action === "previousSection" || action === "moveBackward") floatingWidget.activeIndex = Math.max(0, floatingWidget.activeIndex - 1);
++                    else if (action === "nextSection" || action === "moveForward") floatingWidget.activeIndex = Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + 1);
++                    floatingWidget.kickTimer();
++                }
+ 
+                 function onSetIndexRequested(screen, index) {
+                     if (floatingWidget.matchesScreen(screen)) {
+--- a/src/quickshell/singletons/widgetcontrols/FloatingController.qml
++++ b/src/quickshell/singletons/widgetcontrols/FloatingController.qml
+@@ -9,6 +9,7 @@
+ 
+     signal setIndexRequested(var screen, string index)
+     signal showSystemUsageRequested(var screen)
++    signal quickactionRequested(var screen, string action)
+ 
+     function targetScreen(screen) {
+         if (screen) return screen;
+@@ -26,6 +27,22 @@
+         if (target) controller.showSystemUsageRequested(target);
+     }
+ 
++    function requestQuickaction(action) {
++        let target = targetScreen(null);
++        if (target) controller.quickactionRequested(target, action);
++    }
++
++    IpcHandler {
++        target: "quickactions"
++        function toggle() { controller.requestQuickaction("toggle"); }
++        function previousSection() { controller.requestQuickaction("previousSection"); }
++        function nextSection() { controller.requestQuickaction("nextSection"); }
++        function collapse() { controller.requestQuickaction("collapse"); }
++        function expand() { controller.requestQuickaction("expand"); }
++        function moveForward() { controller.requestQuickaction("moveForward"); }
++        function moveBackward() { controller.requestQuickaction("moveBackward"); }
++    }
++
+     IpcHandler {
+         target: "floating"
+ 

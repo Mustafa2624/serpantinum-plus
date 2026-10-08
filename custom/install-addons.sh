@@ -132,7 +132,7 @@ if [[ "${SERPANTINUM_ADDONS_BOOTSTRAPPED:-0}" != 1 ]]; then
     run_step 'Checking your Serpantinum install...' 'No files were changed.' 'Checking...' check_target
 fi
 
-if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" ]]; then
+if [[ ! -f "$source_dir/patches/addons.patch" || ! -f "$source_dir/patches/quickactions-compat.patch" || ! -d "$source_dir/overlay/src" ]]; then
     if ! bootstrap_dir="$(mktemp -d "${TMPDIR:-/tmp}/serpantinum-plus-addons.XXXXXX")"; then
         printf 'Step 2 failed: could not create a temporary download directory. Nothing was changed.\n' >&2
         exit 1
@@ -161,12 +161,15 @@ if [[ "${SERPANTINUM_ADDONS_BOOTSTRAPPED:-0}" != 1 ]]; then
 fi
 
 patch_file="$source_dir/patches/addons.patch"
+compat_patch_file="$source_dir/patches/quickactions-compat.patch"
 overlay_dir="$source_dir/overlay"
 patch_action=apply
+compat_patch_action=apply
 
 state_root="$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/serpantinum-plus-addons")"
 active_file="$state_root/active-backup"
-mapfile -t patch_paths < <(sed -n 's/^--- a\///p' "$patch_file")
+mapfile -t patch_paths < <({ sed -n 's/^--- a\///p' "$patch_file"; sed -n 's/^--- a\///p' "$compat_patch_file"; } | sort -u)
+mapfile -t compat_patch_paths < <(sed -n 's/^--- a\///p' "$compat_patch_file" | sort -u)
 mapfile -t overlay_paths < <(cd "$overlay_dir" && find src -type f -print | sort)
 
 report_dependencies() {
@@ -210,6 +213,9 @@ is_complete() {
     grep -Fq 'actions/Game.qml' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'actions/DropShelf.qml' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'actions/Music.qml' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
+    grep -Fq 'if (s === "sysinfo" || s === "systeminfo") return "sysmon";' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
+    grep -Fq 'function onQuickactionRequested(screen, action)' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
+    grep -Fq 'target: "quickactions"' "$source_dir_target/quickshell/singletons/widgetcontrols/FloatingController.qml" || return 1
 }
 
 show_group() {
@@ -220,7 +226,11 @@ show_group() {
         for pattern in "$@"; do
             # shellcheck disable=SC2053
             if [[ "$rel" == $pattern ]]; then
-                if [[ "$patch_action" == present ]]; then
+                local file_patch_action="$patch_action"
+                if [[ "$compat_patch_action" == apply ]] && printf '%s\n' "${compat_patch_paths[@]}" | grep -Fxq -- "$rel"; then
+                    file_patch_action=apply
+                fi
+                if [[ "$file_patch_action" == present ]]; then
                     printf '  KEEP %s (integration patch already present)\n' "$rel"
                 else
                     printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
@@ -251,6 +261,8 @@ show_file_plan() {
     show_group 'Downloader:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/faces/ytdl/*'
     show_group 'Music player:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/bar/faces/music/*' 'src/quickshell/quickactions/actions/Music.qml' 'src/quickshell/quickactions/actions/music/*'
     show_group 'Expose:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/qmldir' 'src/quickshell/bar/ExposeState.qml' 'src/quickshell/bar/faces/expose/*'
+    show_group 'Bar module compatibility:' 'src/quickshell/bar/BarModuleRegistry.qml'
+    show_group 'Quickactions shortcuts:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/singletons/widgetcontrols/FloatingController.qml'
     show_group 'Drop shelf:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/DropShelf.qml'
     show_group 'Snake:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/Game.qml' 'src/quickshell/quickactions/actions/Model.js'
 }
@@ -286,6 +298,18 @@ check_changes() {
             printf '%s\n' "$patch_output" >&2
         fi
         printf 'No files were changed. Review those files or update the add-on patch for this Serpantinum version.\n' >&2
+        return 1
+    fi
+    if patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$compat_patch_file" 2>&1)"; then
+        compat_patch_action=apply
+    elif reverse_output="$(patch --batch --reverse --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$compat_patch_file" 2>&1)"; then
+        compat_patch_action=present
+        printf 'Quickactions and sysinfo compatibility patch is already applied; it will be kept.\n'
+    else
+        printf 'The quickactions compatibility patch cannot apply cleanly. No files were changed.\n' >&2
+        printf 'Conflicting file(s):\n' >&2
+        printf '%s\n' "$patch_output" | awk '/^checking file / { print "  " $3 }' >&2
+        printf '%s\n' "$patch_output" >&2
         return 1
     fi
     for rel in "${overlay_paths[@]}"; do
@@ -329,7 +353,7 @@ perform_install() {
     local all_paths=() rel had dest
     local -A seen=()
     local touched_paths=("${overlay_paths[@]}")
-    if [[ "$patch_action" == apply ]]; then
+    if [[ "$patch_action" == apply || "$compat_patch_action" == apply ]]; then
         touched_paths=("${patch_paths[@]}" "${overlay_paths[@]}")
     fi
     for rel in "${touched_paths[@]}"; do
@@ -392,6 +416,15 @@ perform_install() {
         fi
     else
         printf 'Integration patch already present; skipped applying it.\n'
+    fi
+    if [[ "$compat_patch_action" == apply ]]; then
+        if ! patch --batch --forward --fuzz=0 -p1 -d "$install_dir" -i "$compat_patch_file"; then
+            rollback_changes || return 1
+            printf 'Compatibility patch failed; restored all touched files from the operation backup.\n' >&2
+            return 1
+        fi
+    else
+        printf 'Quickactions and sysinfo compatibility patch already present; skipped applying it.\n'
     fi
     if ! cp -a -- "$overlay_dir/src/." "$source_dir_target/"; then
         rollback_changes || return 1

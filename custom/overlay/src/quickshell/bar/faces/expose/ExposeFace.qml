@@ -65,7 +65,7 @@ Item {
         }
     }
 
-    implicitWidth: 0   // button now lives in the workspace pill; this module only hosts the overlay
+    implicitWidth: px(38)
     implicitHeight: parent ? parent.height : px(30)
     property real targetWidth: implicitWidth
     property bool isFaceVisible: moduleActive
@@ -73,7 +73,7 @@ Item {
     // ───────────────────────── bar button ─────────────────────────
     Item {
         id: exposeButton
-        visible: false
+        visible: root.moduleActive
         anchors.centerIn: parent
         width: root.px(30)
         height: root.px(30)
