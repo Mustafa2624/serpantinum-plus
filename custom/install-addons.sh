@@ -164,6 +164,7 @@ fi
 
 patch_file="$source_dir/patches/addons.patch"
 overlay_dir="$source_dir/overlay"
+patch_action=apply
 
 state_root="$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/serpantinum-plus-addons")"
 active_file="$state_root/active-backup"
@@ -272,7 +273,11 @@ show_group() {
         for pattern in "$@"; do
             # shellcheck disable=SC2053
             if [[ "$rel" == $pattern ]]; then
-                printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
+                if [[ "$patch_action" == present ]]; then
+                    printf '  KEEP %s (integration patch already present)\n' "$rel"
+                else
+                    printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
+                fi
                 break
             fi
         done
@@ -315,8 +320,13 @@ check_changes() {
             return 1
         }
     fi
-    local patch_output
-    if ! patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
+    local patch_output reverse_output
+    if patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
+        patch_action=apply
+    elif reverse_output="$(patch --batch --reverse --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
+        patch_action=present
+        printf 'Integration patch is already applied; it will be kept.\n'
+    else
         local conflicts
         conflicts="$(printf '%s\n' "$patch_output" | awk '
             /^checking file / { file = $3 }
@@ -371,7 +381,11 @@ perform_install() {
     fi
     local all_paths=() rel had dest
     local -A seen=()
-    for rel in "${patch_paths[@]}" "${overlay_paths[@]}"; do
+    local touched_paths=("${overlay_paths[@]}")
+    if [[ "$patch_action" == apply ]]; then
+        touched_paths=("${patch_paths[@]}" "${overlay_paths[@]}")
+    fi
+    for rel in "${touched_paths[@]}"; do
         [[ -n "${seen[$rel]:-}" ]] && continue
         seen[$rel]=1
         all_paths+=("$rel")
@@ -423,10 +437,14 @@ perform_install() {
         fi
         rm -rf -- "$backup_dir"
     }
-    if ! patch --batch --forward --fuzz=0 -p1 -d "$install_dir" -i "$patch_file"; then
-        rollback_changes || return 1
-        printf 'Patch failed; restored all touched files from the operation backup.\n' >&2
-        return 1
+    if [[ "$patch_action" == apply ]]; then
+        if ! patch --batch --forward --fuzz=0 -p1 -d "$install_dir" -i "$patch_file"; then
+            rollback_changes || return 1
+            printf 'Patch failed; restored all touched files from the operation backup.\n' >&2
+            return 1
+        fi
+    else
+        printf 'Integration patch already present; skipped applying it.\n'
     fi
     if ! cp -a -- "$overlay_dir/src/." "$source_dir_target/"; then
         rollback_changes || return 1
@@ -440,7 +458,11 @@ perform_install() {
         printf 'Could not record backup state; restored all touched files.\n' >&2
         return 1
     fi
-    printf 'Installed Serpantinum Plus additions: 3 integration patches and %d files.\n' "${#overlay_paths[@]}"
+    if [[ "$patch_action" == apply ]]; then
+        printf 'Installed Serpantinum Plus additions: 3 integration patches and %d files.\n' "${#overlay_paths[@]}"
+    else
+        printf 'Installed Serpantinum Plus additions: kept 3 existing integration patches and added/updated %d files.\n' "${#overlay_paths[@]}"
+    fi
     report_dependencies
 }
 
