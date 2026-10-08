@@ -1,14 +1,30 @@
 #!/usr/bin/env bash
 
-RESET=$'\e[0m'
-BOLD=$'\e[1m'
-DIM=$'\e[2m'
-C_BLUE=$'\e[34m'
-C_CYAN=$'\e[36m'
-C_GREEN=$'\e[32m'
-C_YELLOW=$'\e[33m'
-C_RED=$'\e[31m'
-C_MAGENTA=$'\e[35m'
+ANSI_ENABLED=false
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then ANSI_ENABLED=true; fi
+RESET=''
+BOLD=''
+DIM=''
+C_BLUE=''
+C_CYAN=''
+C_GREEN=''
+C_YELLOW=''
+C_RED=''
+C_MAGENTA=''
+if [[ "$ANSI_ENABLED" == true ]]; then
+    RESET=$'\e[0m'
+    BOLD=$'\e[1m'
+    DIM=$'\e[2m'
+    C_BLUE=$'\e[34m'
+    C_CYAN=$'\e[36m'
+    C_GREEN=$'\e[32m'
+    C_YELLOW=$'\e[33m'
+    C_RED=$'\e[31m'
+    C_MAGENTA=$'\e[35m'
+fi
+
+line_prefix() { if [[ "$ANSI_ENABLED" == true ]]; then printf '\033[K'; fi; }
+clear_screen() { if [[ "$ANSI_ENABLED" == true ]]; then clear || true; fi; }
 
 ENABLE_TELEMETRY=true
 INSTALL_FULL_WALLPAPERS=true
@@ -33,7 +49,7 @@ GPU_INFO=$(echo "$GPU_RAW" | cut -d: -f3 | sed -E 's/ \(rev [0-9a-f]+\)//g' | xa
 [[ -z "$GPU_INFO" ]] && GPU_INFO="$(t "installer.os.unknown_gpu")"
 
 cleanup_terminal() {
-    printf "\e[?25h" 2>/dev/null || true
+    if [[ "$ANSI_ENABLED" == true ]]; then printf "\e[?25h" 2>/dev/null || true; fi
     stty echo icanon 2>/dev/null || true
 }
 trap cleanup_terminal EXIT INT TERM
@@ -127,7 +143,7 @@ init_compositor_detection() {
 }
 
 draw_banner() {
-    clear
+    clear_screen
     printf "%s%s" "$BOLD" "$C_CYAN"
     cat << "EOF"
 ███████╗███████╗██████╗ ██████╗  █████╗ ███╗   ██╗████████╗██╗███╗   ██╗██╗   ██╗███╗   ███╗
@@ -139,24 +155,39 @@ draw_banner() {
 EOF
     printf "%s\n" "$RESET"
 
-    local OSC8_GH=$'\e]8;;https://github.com/'"${REPO_SLUG}"$'\a'
-    local OSC8_TW=$'\e]8;;https://twitter.com/ilyamirox\a'
-    local OSC8_RD=$'\e]8;;https://reddit.com/u/ilyamiro1\a'
-    local OSC8_TG=$'\e]8;;https://t.me/stewart_github\a'
-    local OSC8_KF=$'\e]8;;https://ko-fi.com/ilyamiro\a'
-    local OSC8_END=$'\e]8;;\a'
+    local OSC8_GH='' OSC8_TW='' OSC8_RD='' OSC8_TG='' OSC8_KF='' OSC8_END=''
+    if [[ "$ANSI_ENABLED" == true ]]; then
+        OSC8_GH=$'\e]8;;https://github.com/'"${REPO_SLUG}"$'\a'
+        OSC8_TW=$'\e]8;;https://twitter.com/ilyamirox\a'
+        OSC8_RD=$'\e]8;;https://reddit.com/u/ilyamiro1\a'
+        OSC8_TG=$'\e]8;;https://t.me/stewart_github\a'
+        OSC8_KF=$'\e]8;;https://ko-fi.com/ilyamiro\a'
+        OSC8_END=$'\e]8;;\a'
+    fi
 
-    printf "\033[K%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
-    printf "\033[K%s%s $(t "installer.ui.github")%s   %shttps://github.com/%s%s\n" "$BOLD" "$C_GREEN" "$RESET" "$OSC8_GH" "$REPO_SLUG" "$OSC8_END"
-    printf "\033[K%s%s $(t "installer.ui.twitter")%s  %s@ilyamirox%s  |  %s%s$(t "installer.ui.reddit")%s %su/ilyamiro1%s\n" "$BOLD" "$C_CYAN" "$RESET" "$OSC8_TW" "$OSC8_END" "$BOLD" "$C_RED" "$RESET" "$OSC8_RD" "$OSC8_END"
-    printf "\033[K%s%s $(t "installer.ui.telegram")%s %shttps://t.me/serpantinum_git%s\n" "$BOLD" "$C_BLUE" "$RESET" "$OSC8_TG" "$OSC8_END"
-    printf "\033[K%s%s $(t "installer.ui.donate")%s   %shttps://ko-fi.com/ilyamiro $(t "installer.ui.donate_sub")%s\n" "$BOLD" "$C_MAGENTA" "$RESET" "$OSC8_KF" "$OSC8_END"
-    printf "\033[K%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
-    printf "\033[K%s $(t "installer.ui.user")%s %-25s | %s$(t "installer.ui.os")%s %s\n" "$BOLD" "$RESET" "$USER_NAME" "$BOLD" "$RESET" "$OS_NAME"
-    printf "\033[K%s $(t "installer.ui.cpu")%s  %-25s | %s$(t "installer.ui.gpu")%s %s\n" "$BOLD" "$RESET" "$CPU_INFO" "$BOLD" "$RESET" "$GPU_INFO"
-    printf "\033[K%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
-    printf "\033[K%s $(t "installer.ui.target_version")%s %-10s (%-7s) | %s$(t "installer.ui.install_mode")%s %s\n" "$BOLD" "$RESET" "$TARGET_VERSION" "$TARGET_COMMIT" "$BOLD" "$RESET" "$INSTALL_STATE"
-    printf "\033[K%s================================================================================%s\n\n" "$C_BLUE" "$RESET"
+    line_prefix
+    printf "%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
+    line_prefix
+    printf "%s%s $(t "installer.ui.github")%s   %shttps://github.com/%s%s\n" "$BOLD" "$C_GREEN" "$RESET" "$OSC8_GH" "$REPO_SLUG" "$OSC8_END"
+    line_prefix
+    printf "%s%s $(t "installer.ui.twitter")%s  %s@ilyamirox%s  |  %s%s$(t "installer.ui.reddit")%s %su/ilyamiro1%s\n" "$BOLD" "$C_CYAN" "$RESET" "$OSC8_TW" "$OSC8_END" "$BOLD" "$C_RED" "$RESET" "$OSC8_RD" "$OSC8_END"
+    line_prefix
+    printf "%s%s $(t "installer.ui.telegram")%s %shttps://t.me/serpantinum_git%s\n" "$BOLD" "$C_BLUE" "$RESET" "$OSC8_TG" "$OSC8_END"
+    line_prefix
+    printf "%s%s $(t "installer.ui.donate")%s   %shttps://ko-fi.com/ilyamiro $(t "installer.ui.donate_sub")%s\n" "$BOLD" "$C_MAGENTA" "$RESET" "$OSC8_KF" "$OSC8_END"
+    line_prefix
+    printf "%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
+    line_prefix
+    printf "%s $(t "installer.ui.user")%s %-25s | %s$(t "installer.ui.os")%s %s\n" "$BOLD" "$RESET" "$USER_NAME" "$BOLD" "$RESET" "$OS_NAME"
+    line_prefix
+    printf "%s $(t "installer.ui.cpu")%s  %-25s | %s$(t "installer.ui.gpu")%s %s\n" "$BOLD" "$RESET" "$CPU_INFO" "$BOLD" "$RESET" "$GPU_INFO"
+    line_prefix
+    printf "%s--------------------------------------------------------------------------------%s\n" "$C_BLUE" "$RESET"
+    line_prefix
+    # shellcheck disable=SC2153
+    printf "%s $(t "installer.ui.target_version")%s %-10s (%-7s) | %s$(t "installer.ui.install_mode")%s %s\n" "$BOLD" "$RESET" "$TARGET_VERSION" "$TARGET_COMMIT" "$BOLD" "$RESET" "$INSTALL_STATE"
+    line_prefix
+    printf "%s================================================================================%s\n\n" "$C_BLUE" "$RESET"
 }
 
 show_package_overview() {
@@ -195,7 +226,7 @@ show_package_overview() {
         --prompt="$(t "installer.ui.packages_prompt")" \
         --header="$(t "installer.ui.packages_header")" > /dev/null || true
     stty -echo icanon 2>/dev/null || true
-    printf "\e[?25l"
+    if [[ "$ANSI_ENABLED" == true ]]; then printf "\e[?25l"; fi
 }
 
 remove_compositor() {
@@ -212,16 +243,17 @@ remove_compositor() {
 manage_compositors_menu() {
     draw_banner
     stty -echo 2>/dev/null || true
-    printf "\e[?25l"
+    if [[ "$ANSI_ENABLED" == true ]]; then printf "\e[?25l"; fi
     printf "%s%s$(t "installer.ui.compositors_title")%s\n\n" "$BOLD" "$C_CYAN" "$RESET"
 
     local cursor=0
     local rendered_lines=0
 
     while true; do
-        local status_hypr="$(t "installer.ui.not_installed")"
-        local status_niri="$(t "installer.ui.not_installed")"
-        local status_sway="$(t "installer.ui.not_installed")"
+        local status_hypr status_niri status_sway
+        status_hypr="$(t "installer.ui.not_installed")"
+        status_niri="$(t "installer.ui.not_installed")"
+        status_sway="$(t "installer.ui.not_installed")"
 
         if command -v hyprland &>/dev/null || pacman -Q hyprland &>/dev/null; then
             status_hypr="$(t "installer.ui.installed")"
@@ -249,14 +281,22 @@ manage_compositors_menu() {
         )
 
         if [ "$rendered_lines" -gt 0 ]; then
-            printf "\033[%dA" "$rendered_lines"
+            if [[ "$ANSI_ENABLED" == true ]]; then printf "\033[%dA" "$rendered_lines"; fi
         fi
 
         for i in "${!items[@]}"; do
             if [ "$i" -eq "$cursor" ]; then
-                printf "\r\033[K%s%s ▸ %s%s\n" "$BOLD" "$C_CYAN" "$RESET" "${items[$i]}"
+                if [[ "$ANSI_ENABLED" == true ]]; then
+                    printf "\r\033[K%s%s ▸ %s%s\n" "$BOLD" "$C_CYAN" "$RESET" "${items[$i]}"
+                else
+                    printf '  %s\n' "${items[$i]}"
+                fi
             else
-                printf "\r\033[K    %s\n" "${items[$i]}"
+                if [[ "$ANSI_ENABLED" == true ]]; then
+                    printf "\r\033[K    %s\n" "${items[$i]}"
+                else
+                    printf '    %s\n' "${items[$i]}"
+                fi
             fi
         done
         rendered_lines=${#items[@]}
@@ -338,7 +378,7 @@ manage_compositors_menu() {
 manage_sddm_menu() {
     draw_banner
     stty -echo 2>/dev/null || true
-    printf "\e[?25l"
+    if [[ "$ANSI_ENABLED" == true ]]; then printf "\e[?25l"; fi
     printf "%s%s$(t "installer.ui.sddm_title")%s\n\n" "$BOLD" "$C_CYAN" "$RESET"
 
     local current_dm=""
@@ -351,7 +391,7 @@ manage_sddm_menu() {
     done
 
     if [ -n "$current_dm" ]; then
-        printf "$(t "installer.ui.sddm_detected_active" "dm=${BOLD}${C_YELLOW}%s${RESET}")\n\n" "$current_dm"
+        printf '%s\n\n' "$(t "installer.ui.sddm_detected_active" "dm=${BOLD}${C_YELLOW}${current_dm}${RESET}")"
     else
         printf "%s\n\n" "$(t "installer.ui.sddm_detected_none")"
     fi
@@ -377,14 +417,22 @@ manage_sddm_menu() {
         items+=("4. ${BOLD}${C_GREEN}$(t "installer.ui.done")${RESET}")
 
         if [ "$rendered_lines" -gt 0 ]; then
-            printf "\033[%dA" "$rendered_lines"
+            if [[ "$ANSI_ENABLED" == true ]]; then printf "\033[%dA" "$rendered_lines"; fi
         fi
 
         for i in "${!items[@]}"; do
             if [ "$i" -eq "$cursor" ]; then
-                printf "\r\033[K%s%s ▸ %s%s\n" "$BOLD" "$C_CYAN" "$RESET" "${items[$i]}"
+                if [[ "$ANSI_ENABLED" == true ]]; then
+                    printf "\r\033[K%s%s ▸ %s%s\n" "$BOLD" "$C_CYAN" "$RESET" "${items[$i]}"
+                else
+                    printf '  %s\n' "${items[$i]}"
+                fi
             else
-                printf "\r\033[K    %s\n" "${items[$i]}"
+                if [[ "$ANSI_ENABLED" == true ]]; then
+                    printf "\r\033[K    %s\n" "${items[$i]}"
+                else
+                    printf '    %s\n' "${items[$i]}"
+                fi
             fi
         done
         rendered_lines=${#items[@]}
@@ -440,7 +488,7 @@ run_installer_ui() {
     while true; do
         draw_banner
         stty -echo 2>/dev/null || true
-        printf "\e[?25l"
+        if [[ "$ANSI_ENABLED" == true ]]; then printf "\e[?25l"; fi
 
         local rendered_lines=0
 
@@ -491,14 +539,22 @@ run_installer_ui() {
             fi
 
             if [ "$rendered_lines" -gt 0 ]; then
-                printf "\033[%dA" "$rendered_lines"
+                if [[ "$ANSI_ENABLED" == true ]]; then printf "\033[%dA" "$rendered_lines"; fi
             fi
 
             for i in "${!items[@]}"; do
                 if [ "$i" -eq "$cursor" ]; then
+                    if [[ "$ANSI_ENABLED" == true ]]; then
                     printf "\r\033[K%s%s ▸ %s%s\n" "$BOLD" "$C_CYAN" "$RESET" "${items[$i]}"
                 else
+                    printf '  %s\n' "${items[$i]}"
+                fi
+                else
+                    if [[ "$ANSI_ENABLED" == true ]]; then
                     printf "\r\033[K    %s\n" "${items[$i]}"
+                else
+                    printf '    %s\n' "${items[$i]}"
+                fi
                 fi
             done
             rendered_lines=${#items[@]}
@@ -561,20 +617,20 @@ run_installer_ui() {
                         return 0
                     else
                         cleanup_terminal
-                        clear
+                        clear_screen
                         exit 0
                     fi
                     ;;
                 "8")
                     if [[ "$INSTALL_STATE" == "current" ]]; then
                         cleanup_terminal
-                        clear
+                        clear_screen
                         exit 0
                     fi
                     ;;
                 ESC|[qQ])
                     cleanup_terminal
-                    clear
+                    clear_screen
                     exit 0
                     ;;
                 ENTER|SPACE)
@@ -615,19 +671,21 @@ run_installer_ui() {
                                     sleep 1.5
                                     break
                                 fi
+                                # IS_REINSTALL is consumed by install/install.sh after this menu returns.
+                                # shellcheck disable=SC2034
                                 IS_REINSTALL=true
                                 cleanup_terminal
                                 return 0
                             else
                                 cleanup_terminal
-                                clear
+                                clear_screen
                                 exit 0
                             fi
                             ;;
                         *"8."*)
                             if [[ "$INSTALL_STATE" == "current" ]]; then
                                 cleanup_terminal
-                                clear
+                                clear_screen
                                 exit 0
                             fi
                             ;;
@@ -642,7 +700,7 @@ draw_completion_screen() {
     local target_ver="$1"
     local target_commit="$2"
     cleanup_terminal
-    clear
+    clear_screen
     printf "%s%s" "$BOLD" "$C_GREEN"
     cat << "EOF"
  ___ _  _ ___ _____ _   _     _ _____ ___ ___  _  _    ___ ___  __  __ ___ _    ___ _____ ___ 
@@ -654,7 +712,7 @@ EOF
     printf "%s%s  %s%s\n\n" "$BOLD" "$C_CYAN" "$(t "installer.ui.tagline")" "$RESET"
     printf "%s%s================================================================================%s\n" "$BOLD" "$C_MAGENTA" "$RESET"
     printf "%s%s $(t "installer.ui.support_creator")%s\n" "$BOLD" "$C_YELLOW" "$RESET"
-    printf " $(t "installer.ui.buy_coffee")\n"
+    printf ' %s\n' "$(t "installer.ui.buy_coffee")"
     printf " %s%sKo-fi:%s https://ko-fi.com/ilyamiro\n" "$BOLD" "$C_CYAN" "$RESET"
     printf "%s%s================================================================================%s\n\n" "$BOLD" "$C_MAGENTA" "$RESET"
     printf "%s%s%s\n" "$C_GREEN" "$(t "installer.ui.installed_success" "ver=$target_ver" "commit=$target_commit")" "$RESET"

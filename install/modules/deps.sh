@@ -60,14 +60,16 @@ REQUIRED_PKGS=(
 FAILED_PKGS=()
 
 suppress_tty_sleep() {
-    setterm -blank 0 -powerdown 0 2>/dev/null || true
-    printf '\033[9;0]' 2>/dev/null || true
+    if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+        setterm -blank 0 -powerdown 0 2>/dev/null || true
+        printf '\033[9;0]' 2>/dev/null || true
+    fi
 }
 
 check_supported_os() {
     if [ "$EUID" -eq 0 ]; then
         t "installer.os.error_root" >&2
-        exit 1
+        return 1
     fi
 
     if [ -f /etc/os-release ]; then
@@ -81,10 +83,10 @@ check_supported_os() {
         done
 
         t "installer.os.error_unsupported" "os=$DETECTED_OS"
-        exit 1
+        return 1
     else
         t "installer.os.error_not_found"
-        exit 1
+        return 1
     fi
 }
 

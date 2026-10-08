@@ -2,47 +2,119 @@
 
 set -e
 
-setterm -blank 0 -powerdown 0 2>/dev/null || true
-printf '\033[9;0]' 2>/dev/null || true
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    setterm -blank 0 -powerdown 0 2>/dev/null || true
+    printf '\033[9;0]' 2>/dev/null || true
+fi
+
+step=0
+step_total=5
+
+begin_step() {
+    local label="$1" heartbeat_text="$2"
+    step=$((step + 1))
+    printf '[%d/%d] %s\n' "$step" "$step_total" "$label"
+    STEP_START_MS="$(date +%s%3N)"
+    (
+        local ticks=0
+        while sleep 5; do
+            ticks=$((ticks + 1))
+            if [[ "$label" == Downloading* ]] && [[ -t 1 ]] && ((ticks < 3)); then continue; fi
+            printf '%s\n' "$heartbeat_text"
+        done
+    ) &
+    STEP_HEARTBEAT_PID=$!
+}
+
+end_step() {
+    local elapsed
+    kill "$STEP_HEARTBEAT_PID" 2>/dev/null || true
+    wait "$STEP_HEARTBEAT_PID" 2>/dev/null || true
+    elapsed=$(( $(date +%s%3N) - STEP_START_MS ))
+    printf 'done (%d.%03ds)\n' "$((elapsed / 1000))" "$((elapsed % 1000))"
+}
+
+run_step() {
+    local label="$1" failure_state="$2" heartbeat_text="$3"; shift 3
+    local status=0
+    begin_step "$label" "$heartbeat_text"
+    "$@" || status=$?
+    kill "$STEP_HEARTBEAT_PID" 2>/dev/null || true
+    wait "$STEP_HEARTBEAT_PID" 2>/dev/null || true
+    local elapsed=$(( $(date +%s%3N) - STEP_START_MS ))
+    if ((status == 0)); then
+        printf 'done (%d.%03ds)\n' "$((elapsed / 1000))" "$((elapsed % 1000))"
+        return 0
+    fi
+    printf 'Step %d failed (exit %d): %s\n' "$step" "$status" "$failure_state" >&2
+    return "$status"
+}
+
+download_archive() {
+    local url="$1" output="$2"
+    if [[ -t 1 ]]; then
+        curl --fail --location --show-error --progress-bar --connect-timeout 10 --retry 3 --retry-delay 1 "$url" -o "$output"
+    else
+        curl --fail --location --show-error --silent --connect-timeout 10 --retry 3 --retry-delay 1 "$url" -o "$output"
+    fi
+}
 
 RAW_SLUG="${REPO_SLUG:-Mustafa2624/serpantinum-plus}"
 REPO_SLUG="$(printf '%s' "$RAW_SLUG" | tr -d '\r\n\t ' | sed 's/[^a-zA-Z0-9_\/-]//g')"
 CACHE_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/serpantinum-installer"
 export REPO_SLUG
 
-if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-    INSTALL_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
-    PROJECT_ROOT="$(dirname "$INSTALL_DIR")"
-else
-    INSTALL_DIR=""
-    PROJECT_ROOT=""
-fi
+locate_source() {
+    if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+        INSTALL_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+        PROJECT_ROOT="$(dirname "$INSTALL_DIR")"
+    else
+        INSTALL_DIR=""
+        PROJECT_ROOT=""
+    fi
+}
+run_step 'Checking installer source...' 'The shell install has not started.' 'Still checking installer source...' locate_source
 
 if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/install/modules/deps.sh" || ! -d "$PROJECT_ROOT/src" ]]; then
     command -v curl &>/dev/null || { echo "curl is required to download the installer source." >&2; exit 1; }
     command -v tar &>/dev/null || { echo "tar is required to extract the installer source." >&2; exit 1; }
-    mkdir -p "$CACHE_BASE"
-    SOURCE_CACHE="$CACHE_BASE/source"
-    SOURCE_STAGE="$(mktemp -d "$CACHE_BASE/.source.XXXXXX")"
-    SOURCE_ARCHIVE="$CACHE_BASE/.source.$$.tar.gz"
-    cleanup_source_download() {
-        rm -rf -- "$SOURCE_STAGE"
-        rm -f -- "$SOURCE_ARCHIVE"
-    }
-    trap cleanup_source_download EXIT
     SOURCE_URL="${SERPANTINUM_PLUS_TARBALL:-https://github.com/${REPO_SLUG}/archive/refs/heads/master.tar.gz}"
-    curl -fsSL "$SOURCE_URL" -o "$SOURCE_ARCHIVE"
-    tar -xzf "$SOURCE_ARCHIVE" --strip-components=1 -C "$SOURCE_STAGE"
-    [[ -f "$SOURCE_STAGE/install/modules/deps.sh" && -d "$SOURCE_STAGE/src" ]] || {
-        echo "The downloaded archive does not contain a Serpantinum source tree." >&2
-        exit 1
+    printf 'Before downloading: I will fetch the Serpantinum Plus source archive; nothing has been changed yet. Archive size varies and is not published.\n'
+    download_source() {
+        mkdir -p "$CACHE_BASE" || return 1
+        SOURCE_CACHE="$CACHE_BASE/source"
+        SOURCE_STAGE="$(mktemp -d "$CACHE_BASE/.source.XXXXXX")" || return 1
+        SOURCE_ARCHIVE="$CACHE_BASE/.source.$$.tar.gz"
+        curl_status=0
+        download_archive "$SOURCE_URL" "$SOURCE_ARCHIVE" || curl_status=$?
+        if ((curl_status != 0)); then
+            rm -rf -- "$SOURCE_STAGE"
+            rm -f -- "$SOURCE_ARCHIVE"
+            return "$curl_status"
+        fi
     }
-    rm -rf -- "$SOURCE_CACHE"
-    mv -- "$SOURCE_STAGE" "$SOURCE_CACHE"
-    rm -f -- "$SOURCE_ARCHIVE"
-    trap - EXIT
-    INSTALL_DIR="$SOURCE_CACHE/install"
-    PROJECT_ROOT="$SOURCE_CACHE"
+    run_step 'Downloading Serpantinum Plus (size varies)...' 'No files were changed.' 'Still downloading...' download_source
+    unpack_source() {
+        if ! tar -xzf "$SOURCE_ARCHIVE" --strip-components=1 -C "$SOURCE_STAGE"; then
+            rm -rf -- "$SOURCE_STAGE" "$SOURCE_ARCHIVE"
+            printf 'Could not unpack the downloaded archive.\n' >&2
+            return 1
+        fi
+        [[ -f "$SOURCE_STAGE/install/modules/deps.sh" && -d "$SOURCE_STAGE/src" ]] || {
+            rm -rf -- "$SOURCE_STAGE" "$SOURCE_ARCHIVE"
+            echo 'The downloaded archive does not contain a Serpantinum source tree.' >&2
+            return 1
+        }
+        rm -rf -- "$SOURCE_CACHE"
+        mv -- "$SOURCE_STAGE" "$SOURCE_CACHE"
+        rm -f -- "$SOURCE_ARCHIVE"
+        INSTALL_DIR="$SOURCE_CACHE/install"
+        PROJECT_ROOT="$SOURCE_CACHE"
+    }
+    run_step 'Unpacking...' 'No shell files were changed.' 'Still unpacking...' unpack_source
+else
+    run_step 'Using the local Serpantinum Plus checkout...' 'No shell files were changed.' 'Still checking...' true
+    run_step 'Unpacking... not needed for a local checkout.' 'No shell files were changed.' 'Still checking...' true
 fi
 
 export SERPANTINUM_DIR="$PROJECT_ROOT/src"
@@ -54,39 +126,41 @@ if [[ "${SERPANTINUM_INSTALLER_PREFLIGHT:-0}" == 1 ]]; then
 fi
 
 MODULES_DIR="$INSTALL_DIR/modules"
+begin_step 'Loading installer modules...' 'Still loading installer modules...'
 
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/scripts/i18n.sh"
+source "$PROJECT_ROOT/src/scripts/i18n.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$PROJECT_ROOT/src/scripts/i18n.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/deps.sh"
+source "$MODULES_DIR/deps.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/deps.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/state.sh"
+source "$MODULES_DIR/state.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/state.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/migrate.sh"
+source "$MODULES_DIR/migrate.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/migrate.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/deploy.sh"
+source "$MODULES_DIR/deploy.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/deploy.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/version.sh"
+source "$MODULES_DIR/version.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/version.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/config.sh"
+source "$MODULES_DIR/config.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/config.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/service.sh"
+source "$MODULES_DIR/service.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/service.sh" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$MODULES_DIR/ui.sh"
+source "$MODULES_DIR/ui.sh" || { printf 'Step 4 failed: could not load %s. No shell files were changed.\n' "$MODULES_DIR/ui.sh" >&2; exit 1; }
+end_step
 
-TELEMETRY_ID=$(get_telemetry_id)
-ENABLE_TELEMETRY=$(get_telemetry_enabled)
-
-check_supported_os
-bootstrap_installer_deps
-
-INSTALL_STATE=$(detect_install_state)
-OLD_VERSION=$(get_installed_version)
-TARGET_VERSION=$(get_target_version "$PROJECT_ROOT" "$REPO_SLUG")
-TARGET_COMMIT=$(get_target_commit "$PROJECT_ROOT" "$REPO_SLUG")
-OLD_COMMIT=$(get_installed_commit)
-
-init_compositor_detection
+pre_menu_checks() {
+    TELEMETRY_ID=$(get_telemetry_id) || return $?
+    ENABLE_TELEMETRY=$(get_telemetry_enabled) || return $?
+    check_supported_os || return $?
+    bootstrap_installer_deps || return $?
+    INSTALL_STATE=$(detect_install_state) || return $?
+    OLD_VERSION=$(get_installed_version) || return $?
+    TARGET_VERSION=$(get_target_version "$PROJECT_ROOT" "$REPO_SLUG") || return $?
+    TARGET_COMMIT=$(get_target_commit "$PROJECT_ROOT" "$REPO_SLUG") || return $?
+    OLD_COMMIT=$(get_installed_commit) || return $?
+    init_compositor_detection || return $?
+}
+run_step 'Checking requirements and preparing the menu...' 'The shell install has not started; dependency setup may have made partial package changes.' 'Still preparing requirements...' pre_menu_checks
 run_installer_ui
 
 TARGET_VERSION=$(get_target_version "$PROJECT_ROOT" "$REPO_SLUG")
