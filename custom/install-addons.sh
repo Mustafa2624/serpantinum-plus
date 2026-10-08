@@ -42,16 +42,12 @@ run_step() {
 
 download_archive() {
     local url="$1" output="$2" headers="${2}.headers.$$" errors="${2}.errors.$$"
-    local curl_pid status=0 downloaded total percent filled empty bar label elapsed frames=( '|' '/' '-' '\' ) frame=0
-    local download_started=$SECONDS
+    local curl_pid status=0 downloaded total percent filled empty bar frames=( '|' '/' '-' '\' ) frame=0
     if [[ -t 1 ]]; then
         curl --fail --location --show-error --silent --connect-timeout 10 --retry 3 --retry-delay 1 \
             --dump-header "$headers" --stderr "$errors" "$url" -o "$output" &
         curl_pid=$!
         while kill -0 "$curl_pid" 2>/dev/null; do
-            elapsed=$((SECONDS - download_started))
-            label='Downloading'
-            ((elapsed >= 15)) && label='Still downloading'
             downloaded="$(stat -c '%s' "$output" 2>/dev/null || printf 0)"
             total="$(awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }' "$headers" 2>/dev/null || printf 0)"
             if ((total > 0)); then
@@ -61,11 +57,11 @@ download_archive() {
                 printf -v bar '%*s' "$filled" ''; bar=${bar// /#}
                 empty=$((28 - filled))
                 printf -v empty '%*s' "$empty" ''; empty=${empty// /-}
-                printf '\r%s [%s%s] %3d%% (%s/%s MB)' "$label" "$bar" "$empty" "$percent" \
+                printf '\rDownloading [%s%s] %3d%% (%s/%s MB)' "$bar" "$empty" "$percent" \
                     "$(awk -v n="$downloaded" 'BEGIN { printf "%.1f", n / 1048576 }')" \
                     "$(awk -v n="$total" 'BEGIN { printf "%.1f", n / 1048576 }')"
             else
-                printf '\r%s %s (%s MB received)' "$label" "${frames[$((frame % ${#frames[@]}))]}" \
+                printf '\rDownloading %s (%s MB received)' "${frames[$((frame % ${#frames[@]}))]}" \
                     "$(awk -v n="$downloaded" 'BEGIN { printf "%.1f", n / 1048576 }')"
                 frame=$((frame + 1))
             fi
@@ -145,8 +141,8 @@ if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" 
     fi
     trap 'rm -rf -- "$bootstrap_dir"' EXIT
     archive_url="${SERPANTINUM_PLUS_TARBALL:-https://github.com/Mustafa2624/serpantinum-plus/archive/refs/heads/master.tar.gz}"
-    printf 'Before downloading: I will fetch the Serpantinum Plus installer archive; nothing has been changed yet. GitHub sends no archive size, so progress shows bytes received.\n'
-    run_step 'Downloading Serpantinum Plus (showing bytes received)...' 'Nothing was changed.' 'Still downloading...' download_archive "$archive_url" "$bootstrap_dir/repo.tar.gz"
+    printf 'Before downloading: I will fetch the Serpantinum Plus installer archive; nothing has been changed yet.\n'
+    run_step 'Downloading Serpantinum Plus...' 'Nothing was changed.' 'Downloading...' download_archive "$archive_url" "$bootstrap_dir/repo.tar.gz"
     # shellcheck disable=SC2329
     unpack_bootstrap() {
         mkdir -p "$bootstrap_dir/extracted" || return 1
