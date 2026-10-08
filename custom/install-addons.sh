@@ -138,14 +138,6 @@ overlay_dir="$source_dir/overlay"
 
 state_root="$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/serpantinum-plus-addons")"
 active_file="$state_root/active-backup"
-upstream_commit="8c3ea64"
-
-# SHA-256 fingerprints of the integration files at supported upstream commit 8c3ea64.
-declare -A upstream_sha=(
-    [src/quickshell/bar/BarModuleRegistry.qml]=0562b5fcaf81cc315125b71403fda2573c1bad466c9e56520005b97b6d0cd186
-    [src/quickshell/bar/qmldir]=729048743ed9e62cb7a1d5e3af0dedc93fa4e2196779cb7e364922360f646de9
-    [src/quickshell/quickactions/Floating.qml]=4a5cb2404510976396d1113ca01a7ee4cf13fbc70dc41d1ebce3f5fdba6bef3b
-)
 mapfile -t patch_paths < <(sed -n 's/^--- a\///p' "$patch_file")
 mapfile -t overlay_paths < <(cd "$overlay_dir" && find src -type f -print | sort)
 
@@ -250,19 +242,31 @@ show_group() {
     for rel in "${patch_paths[@]}"; do
         for pattern in "$@"; do
             # shellcheck disable=SC2053
-            if [[ "$rel" == $pattern ]]; then printf '  PATCH %s\n' "$rel"; break; fi
+            if [[ "$rel" == $pattern ]]; then
+                printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
+                break
+            fi
         done
     done
     for rel in "${overlay_paths[@]}"; do
         for pattern in "$@"; do
             # shellcheck disable=SC2053
-            if [[ "$rel" == $pattern ]]; then printf '  ADD   %s\n' "$rel"; break; fi
+            if [[ "$rel" == $pattern ]]; then
+                if [[ -f "$install_dir/$rel" ]] && cmp -s "$install_dir/$rel" "$overlay_dir/$rel"; then
+                    printf '  REUSE %s (already matches the add-on; uninstall removes it)\n' "$rel"
+                elif [[ -e "$install_dir/$rel" || -L "$install_dir/$rel" ]]; then
+                    printf '  OVERWRITE %s (backup: %s/files/%s)\n' "$rel" "$backup_dir" "$rel"
+                else
+                    printf '  ADD %s\n' "$rel"
+                fi
+                break
+            fi
         done
     done
 }
 
 show_file_plan() {
-    printf 'Files to change:\n'
+    printf 'Files to change (existing files are backed up before overwrite):\n'
     show_group 'Downloader:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/faces/ytdl/*'
     show_group 'Music player:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/bar/faces/music/*' 'src/quickshell/quickactions/actions/Music.qml' 'src/quickshell/quickactions/actions/music/*'
     show_group 'Expose:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/qmldir' 'src/quickshell/bar/ExposeState.qml' 'src/quickshell/bar/faces/expose/*'
@@ -275,16 +279,6 @@ check_changes() {
         printf 'Serpantinum Plus additions are already present; nothing to do.\n'
         return 2
     fi
-    local base_matches=true rel actual
-    for rel in "${!upstream_sha[@]}"; do
-        [[ -f "$source_dir_target/${rel#src/}" ]] || { base_matches=false; break; }
-        actual="$(sha256sum "$source_dir_target/${rel#src/}" | cut -d' ' -f1)"
-        if [[ "$actual" != "${upstream_sha[$rel]}" ]]; then base_matches=false; break; fi
-    done
-    if [[ "$base_matches" != true ]]; then
-        printf 'This install does not match supported upstream commit %s; no files were changed.\n' "$upstream_commit" >&2
-        return 1
-    fi
     if [[ -f "$active_file" ]]; then
         previous_backup="$(<"$active_file")"
         [[ -f "$previous_backup/manifest.tsv" && "$(<"$previous_backup/install-dir")" == "$install_dir" ]] || {
@@ -292,10 +286,22 @@ check_changes() {
             return 1
         }
     fi
-    patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" >/dev/null || {
-        printf 'Integration patch cannot apply; no files were changed.\n' >&2
+    local patch_output
+    if ! patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
+        local conflicts
+        conflicts="$(printf '%s\n' "$patch_output" | awk '
+            /^checking file / { file = $3 }
+            /Hunk .*FAILED/ || /FAILED to open/ { if (file != "") print file }
+        ' | sort -u)"
+        printf 'The integration patch cannot apply cleanly.\n' >&2
+        if [[ -n "$conflicts" ]]; then
+            printf 'Conflicting file(s):\n%s\n' "$conflicts" >&2
+        else
+            printf '%s\n' "$patch_output" >&2
+        fi
+        printf 'No files were changed. Review those files or update the add-on patch for this Serpantinum version.\n' >&2
         return 1
-    }
+    fi
     for rel in "${overlay_paths[@]}"; do
         local dest="$source_dir_target/${rel#src/}"
         if [[ -e "$dest" && ! -f "$dest" ]]; then
@@ -309,12 +315,12 @@ check_changes() {
 if is_complete; then
     run_step 'Checking what will change...' 'No files were changed.' 'Still checking...' true
     printf 'Serpantinum Plus additions are already present; nothing to do.\n'
-    show_file_plan
-    printf 'Dry run complete. Nothing was changed.\n'
     report_dependencies
     exit 0
 fi
 run_step 'Checking what will change...' 'No files were changed.' 'Still checking...' check_changes
+backup_dir="$state_root/backups/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+printf 'If you continue, the backup will be saved to: %s\n' "$backup_dir"
 show_file_plan
 report_dependencies
 if [[ "$mode" == dry-run ]]; then printf 'Dry run complete. Nothing was changed.\n'; exit 0; fi
@@ -323,7 +329,6 @@ if [[ "$yes" != true ]]; then
     [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]] || { printf 'Cancelled.\n'; exit 0; }
 fi
 
-backup_dir="$state_root/backups/$(date -u +%Y%m%dT%H%M%SZ)-$$"
 perform_install() {
     mkdir -p -- "$state_root/backups" || { printf 'Could not create backup directory; no install files were changed.\n' >&2; return 1; }
     rollback_dir="$(mktemp -d "${TMPDIR:-/tmp}/serpantinum-plus-rollback.XXXXXX")" || { printf 'Could not create rollback storage; no install files were changed.\n' >&2; return 1; }
@@ -336,17 +341,12 @@ perform_install() {
         return 1
     fi
     local all_paths=() rel had dest
-    local -A seen=() previous_absent=()
+    local -A seen=()
     for rel in "${patch_paths[@]}" "${overlay_paths[@]}"; do
         [[ -n "${seen[$rel]:-}" ]] && continue
         seen[$rel]=1
         all_paths+=("$rel")
     done
-    if [[ -f "$active_file" ]]; then
-        while IFS=$'\t' read -r had rel; do
-            [[ "$had" == absent ]] && previous_absent["$rel"]=1 || true
-        done < "$previous_backup/manifest.tsv"
-    fi
     for rel in "${all_paths[@]}"; do
         dest="$install_dir/$rel"
         if [[ -e "$dest" || -L "$dest" ]]; then
@@ -357,9 +357,7 @@ perform_install() {
                 printf 'Could not prepare rollback data; no install files were changed.\n' >&2
                 return 1
             fi
-            if [[ -n "${previous_absent[$rel]:-}" ]]; then
-                printf 'absent\t%s\n' "$rel" >> "$backup_dir/manifest.tsv" || { rm -rf -- "$backup_dir"; printf 'Could not write backup manifest; no install files were changed.\n' >&2; return 1; }
-            elif [[ -f "$dest" ]] && [[ -f "$overlay_dir/$rel" ]] && cmp -s "$dest" "$overlay_dir/$rel"; then
+            if [[ -f "$dest" ]] && [[ -f "$overlay_dir/$rel" ]] && cmp -s "$dest" "$overlay_dir/$rel"; then
                 printf 'absent\t%s\n' "$rel" >> "$backup_dir/manifest.tsv" || { rm -rf -- "$backup_dir"; printf 'Could not write backup manifest; no install files were changed.\n' >&2; return 1; }
             else
                 if ! mkdir -p -- "$backup_dir/files/$(dirname -- "$rel")" ||
