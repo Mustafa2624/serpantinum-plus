@@ -1,3 +1,15 @@
+# Serpantinum Plus
+
+A fork of ilyamiro's Serpantinum with extra modules and quality-of-life features, built for Hyprland on Arch Linux.
+
+## What's added
+
+- Video downloader: bar pill and popup powered by yt-dlp
+- Local music player: prev / play-pause / next, repeat and shuffle, seekbar, and a song library
+- Drop shelf in Quickactions: a temporary shelf for dragging and dropping files
+- Snake game in Quickactions: a fourth item in the Quickactions switcher
+- Expose-style window overview: a macOS-inspired button that shows apps from all workspaces
+
 <div align="center">
   <a href="https://ko-fi.com/ilyamiro">
     <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" />
@@ -8,13 +20,19 @@
   <img src="docs/assets/banner.png" alt="Serpantinum" width="850" />
 </div>
 
-## Previews
+## Screenshots
 
-| | |
+| Feature | Screenshot |
 |---|---|
-| ![Window overview](docs/assets/previews/preview_1.png) | ![YouTube downloader](docs/assets/previews/preview_2.png) |
-| ![Music player](docs/assets/previews/preview_3.png) | ![Drop Shelf](docs/assets/previews/preview_4.png) |
-| ![Snake game](docs/assets/previews/preview_5.png) | |
+| **Video downloader** — yt-dlp controls for video, audio, playlists, and transcripts. | ![Video downloader](docs/screenshots/video-downloader.png) |
+| **Expose overview** — windows from all workspaces. | ![Expose overview](docs/screenshots/expose-overview.jpg) |
+| **Local music player** — library and playback controls. | ![Music player](docs/screenshots/music-player.jpg) |
+| **Drop shelf** — a Quickactions panel for dragged files and links. | ![Drop shelf](docs/screenshots/drop-shelf.jpg) |
+| **Snake game** — playable from Quickactions. | ![Snake game](docs/screenshots/snake-game.jpg) |
+
+## Install / update notes
+
+From this fork checkout on Arch Linux, run `REPO_SLUG=Mustafa2624/serpantinum-plus bash install/install.sh`. For an existing install, copy this fork's `src/` into `~/.local/share/serpantinum/src/`. After an upstream update, run `./custom/restore.sh` from this checkout to reapply the customized source. Restart with `serpantinumd stop && serpantinumd start`.
 
 ---
 
@@ -180,6 +198,8 @@ To run the shell, launch `serpantinumd start`
 
 ## Credits
 
+Based on Serpantinum by ilyamiro. Snake game inspired by [jhgundersen/omarchy-snake-plugin](https://github.com/jhgundersen/omarchy-snake-plugin); downloader inspired by [dlpwaters/omarchy-yt-downloader](https://github.com/dlpwaters/omarchy-yt-downloader).
+
 * Special thanks to Darkall44/Qylock for providing a gorgeous material SDDM theme!
 
 <br><br><br>
@@ -220,4 +240,6 @@ To run the shell, launch `serpantinumd start`
 Copyright (C) 2026 Illia Miroshnichenko
 
 This project is licensed under the GNU Affero General Public License version 3, or (at your option) any later version. See the [LICENSE.md](LICENSE.md) file for the full license text.
+
+The original Serpantinum code retains its AGPL-3.0-or-later license. The Snake game adaptation includes a separate MIT notice in [custom/THIRD_PARTY_NOTICES.md](custom/THIRD_PARTY_NOTICES.md).
 
