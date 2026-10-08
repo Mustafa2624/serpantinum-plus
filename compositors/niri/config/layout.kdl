@@ -1,9 +1,0 @@
-layout {
-    gaps 4
-    border {
-        off
-    }
-    focus-ring {
-        off
-    }
-}

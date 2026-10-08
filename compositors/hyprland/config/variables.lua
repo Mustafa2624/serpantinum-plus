@@ -1,2 +1,0 @@
-mainMod = "SUPER"
-terminal = "kitty"

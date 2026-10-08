@@ -12,19 +12,13 @@
 
 ## Install
 
-**Already have Serpantinum?** Add only my modules. The installer previews its changes, asks first, and backs up everything it touches. When it changes files, it stops and starts the shell if `serpantinumd` is available; otherwise it tells you to restart manually:
+**Already have Serpantinum?** This repository is for adding the custom modules to an existing install. The installer previews its changes, asks first, backs up files it overwrites, and restarts the shell when it can:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/custom/install-addons.sh)
 ```
 
-**Starting fresh?** Install the whole shell with my modules included. Pick **Install** in the menu. At the end, the installer asks whether to reboot the computer; if it does not reboot, it then starts the shell:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/install/install.sh)
-```
-
-**Update:** run the same command again (in the full installer, pick **Update**).
+**Update:** run the same add-ons command again after updating Serpantinum.
 **Remove my modules:** add `--uninstall` to the add-ons command.
 
 <details>
@@ -76,8 +70,6 @@ hl.on("hyprland.start", function()
 end)
 ```
 
-Sample Hyprland configs and keybinds are in [`compositors/`](compositors/).
-
 </details>
 
 <details>
@@ -86,7 +78,7 @@ Sample Hyprland configs and keybinds are in [`compositors/`](compositors/).
 - **Downloader error:** install `yt-dlp` and `ffmpeg`, then restart the shell.
 - **No music playback:** install `mpv`, then restart the shell.
 - **Clipboard or equalizer missing:** add the autostart lines above.
-- **Coming from Serpantinum v1:** your old config is backed up by the installer. Monitors, keybinds and autostart are now yours to set.
+- **Patch conflict:** the installer lists the file that conflicts and stops before changing anything. Update Serpantinum or review the conflicting file before retrying.
 
 </details>
 
