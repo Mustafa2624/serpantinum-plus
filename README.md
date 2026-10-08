@@ -16,6 +16,7 @@
 - [Fork vs upstream](#fork-vs-upstream)
 - [Features](#features)
 - [Installation](#installation)
+- [Running](#running)
 - [Requirements / Setup](#requirements--setup)
 - [Updating](#updating)
 - [Troubleshooting](#troubleshooting)
@@ -74,6 +75,8 @@ Open a macOS-inspired overview from the bar to see and activate windows across a
 
 ## Installation
 
+> **Migrating from v1:** The installer backs up selected compositor configurations during legacy migration. Serpantinum is now a shell; compositor settings such as monitors, keybinds, and autostart remain yours to configure. This fork includes [sample Hyprland configuration and keybinds](compositors/hyprland/config/keybinds.lua) in [`compositors/`](compositors/).
+
 ### Path A - Fresh install (whole shell from this fork)
 
 1. Clone this fork and enter the checkout:
@@ -99,15 +102,38 @@ Open a macOS-inspired overview from the bar to see and activate windows across a
 
 ### Path B - Already have Serpantinum (install only my additions)
 
-1. An add-ons-only installer is **coming soon**. There is currently no supported command that overlays just these additions. `custom/restore.sh` copies the entire fork `src/` tree and is intended to restore the customized shell after an update, not to install only the add-ons onto an existing Serpantinum install.
+1. From this fork checkout, preview the add-on overlay and integration patches against your existing install:
 
-2. Until that installer exists, use Path A for a complete installation from this fork. Do not copy the fork's whole `src/` directory if you need to preserve a different existing Serpantinum source tree.
+   ```bash
+   bash custom/install-addons.sh --dry-run
+   ```
+
+2. If the preview succeeds, apply the additions. The installer backs up every patched or newly added file before changing anything:
+
+   ```bash
+   bash custom/install-addons.sh
+   ```
+
+3. Restart the shell:
+
+   ```bash
+   serpantinumd stop && serpantinumd start
+   ```
+
+   To remove the additions and restore the backup, run `bash custom/install-addons.sh --uninstall`.
+
+## Running
+
+Launch the shell with:
+
+```bash
+serpantinumd start
+```
 
 ## Requirements / Setup
 
 - Arch Linux or an Arch-based distribution, Hyprland, and Quickshell. The fork installer installs the shell's declared system dependencies.
-- Install `yt-dlp` separately for the video downloader; `ffmpeg` is part of the installer's dependency list.
-- Install `mpv` separately for the local music player; it is not in the installer's dependency list.
+- The fork installer includes `yt-dlp`, `mpv`, and `ffmpeg` in its package list. The add-on installer does not install system packages; it reports any of these tools that are missing.
 - Clipboard integration uses `wl-paste` and `cliphist`; the installer includes `wl-clipboard` and `cliphist`.
 - The equalizer integration uses EasyEffects, which is included in the installer's dependency list.
 
@@ -125,14 +151,21 @@ end)
 
 ## Updating
 
-Run the installer again from this fork checkout to update from Serpantinum Plus. If an official upstream update has replaced customized source files, restore the fork's full `src/` tree from the checkout:
+Before updating an existing upstream Serpantinum installation, remove the add-ons so the updater can operate on the original files:
 
 ```bash
-./custom/restore.sh
+bash custom/install-addons.sh --uninstall
+```
+
+After the upstream update completes, apply the add-ons again from this checkout:
+
+```bash
+bash custom/install-addons.sh --dry-run
+bash custom/install-addons.sh
 serpantinumd stop && serpantinumd start
 ```
 
-`custom/restore.sh` copies all of this fork's `src/` into the installed shell; it is not an add-ons-only overlay.
+The shell's update-available check currently reads upstream `ilyamiro/serpantinum`'s `version.txt`. An upstream update can replace installed source files, so uninstall these patches before updating and reinstall them afterward.
 
 ## Troubleshooting
 
@@ -167,6 +200,8 @@ Serpantinum Plus is based on [Serpantinum by ilyamiro](https://github.com/ilyami
 
 The original Serpantinum code is distributed under the GNU Affero General Public License, version 3 or later; see [LICENSE.md](LICENSE.md). Third-party component terms and attribution for custom additions are listed in [`custom/THIRD_PARTY_NOTICES.md`](custom/THIRD_PARTY_NOTICES.md).
 
+Copyright (C) 2026 Illia Miroshnichenko
+
 Modified by Mustafa2624, 2026.
 
 <br><br><br>
@@ -197,5 +232,3 @@ Modified by Mustafa2624, 2026.
   <a href="https://github.com/kranks-uga"><img src="https://avatars.githubusercontent.com/u/179175113?v=4&s=48" width="48" height="48" alt="kranks-uga"></a>
   <a href="https://github.com/zynx-real"><img src="https://avatars.githubusercontent.com/u/320626542?v=4&s=48" width="48" height="48" alt="zynx-real"></a>
 </div>
-
----
