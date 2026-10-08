@@ -139,18 +139,13 @@ PanelWindow {
     property bool isMediaActive: targetPlayer !== null && targetPlayer.playbackState !== MprisPlaybackState.Stopped && targetPlayer.trackTitle !== ""
     property bool isPlaying: targetPlayer ? (targetPlayer.playbackState === MprisPlaybackState.Playing || targetPlayer.isPlaying) : false
     
-    property real currentLivePosition: {
-        if (!targetPlayer) return 0.0;
-        let pos = (targetPlayer === MprisController.activePlayer) ? MprisController.livePosition : targetPlayer.position;
-        return (typeof pos === "number" && !isNaN(pos)) ? pos : 0.0;
-    }
+    property real currentLivePosition: targetPlayer ? ((targetPlayer === MprisController.activePlayer) ? MprisController.livePosition : targetPlayer.position) : 0
 
     Connections {
         target: sideMusicPopout.targetPlayer
         function onPositionChanged() {
             if (sideMusicPopout.targetPlayer && sideMusicPopout.targetPlayer !== MprisController.activePlayer) {
-                let pos = sideMusicPopout.targetPlayer.position;
-                sideMusicPopout.currentLivePosition = (typeof pos === "number" && !isNaN(pos)) ? pos : 0.0;
+                sideMusicPopout.currentLivePosition = sideMusicPopout.targetPlayer.position;
             }
         }
     }
@@ -164,8 +159,7 @@ PanelWindow {
                 if (typeof sideMusicPopout.targetPlayer.positionChanged === "function") {
                     sideMusicPopout.targetPlayer.positionChanged();
                 }
-                let pos = sideMusicPopout.targetPlayer.position;
-                sideMusicPopout.currentLivePosition = (typeof pos === "number" && !isNaN(pos)) ? pos : 0.0;
+                sideMusicPopout.currentLivePosition = sideMusicPopout.targetPlayer.position;
             }
         }
     }
@@ -722,7 +716,7 @@ PanelWindow {
                     Layout.preferredHeight: sideMusicPopout.s(12)
                     Layout.alignment: Qt.AlignVCenter
                     from: 0.0
-                    to: (targetPlayer && typeof targetPlayer.length === "number" && !isNaN(targetPlayer.length)) ? targetPlayer.length : 100.0
+                    to: targetPlayer ? targetPlayer.length : 100.0
                     value: sideMusicPopout.currentLivePosition
                     showValueBubble: false
                     showTooltip: false

@@ -830,11 +830,6 @@ Scope {
                                     }
                                 }
 
-                                Component.onDestruction: {
-                                    preview.active = false;
-                                    preview.source = "";
-                                }
-
                                 function bringToFront() {
                                     redactorMode.topZ += 1;
                                     widgetProxy.currentZ = redactorMode.topZ;
@@ -1199,7 +1194,6 @@ Scope {
                                         onLoaded: {
                                             if (item) {
                                                 try {
-                                                    item.visible = Qt.binding(() => redactorWindow.visible);
                                                     if (item.imagePath !== undefined) {
                                                         item.imagePath = Qt.binding(() => widgetProxy.wImagePath);
                                                     }

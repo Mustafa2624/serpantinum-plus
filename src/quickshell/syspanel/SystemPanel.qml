@@ -89,22 +89,6 @@ Item {
     property bool wifiRadioEnabled: Networking.wifiEnabled
     property bool btRadioEnabled: Boolean(Bluetooth.defaultAdapter && Bluetooth.defaultAdapter.enabled)
 
-    Connections {
-        target: Bluetooth
-        ignoreUnknownSignals: true
-        function onDefaultAdapterChanged() {
-            root.btRadioEnabled = Boolean(Bluetooth.defaultAdapter && Bluetooth.defaultAdapter.enabled);
-        }
-    }
-
-    Connections {
-        target: Bluetooth.defaultAdapter || null
-        ignoreUnknownSignals: true
-        function onEnabledChanged() {
-            root.btRadioEnabled = Boolean(Bluetooth.defaultAdapter && Bluetooth.defaultAdapter.enabled);
-        }
-    }
-
     property bool isDraggingVol: false
     property bool isDraggingBri: false
     property bool usesDdcBrightness: false

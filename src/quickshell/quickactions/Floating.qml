@@ -12,6 +12,117 @@ Variants {
     delegate: Component {
         PanelWindow {
             id: floatingWidget
+
+            function closeQuickActions() {
+                floatingWidget.isPinned = false;
+                floatingWidget.isExpanded = false;
+                floatingWidget.isSidebarVisible = false;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.useGraceTimer = false;
+
+                hideTimer.stop();
+                peekHideTimer.stop();
+            }
+
+            IpcHandler {
+    target: "quickactions"
+
+    function toggle() {
+        floatingWidget.shortcutToggle();
+    }
+
+    function show() {
+        let edge =
+            floatingWidget.barPosition === "left"
+                ? "right"
+                : floatingWidget.barPosition === "right"
+                    ? "left"
+                    : floatingWidget.activeEdge;
+
+        floatingWidget.isPinned = false;
+        floatingWidget.isExpanded = false;
+
+        floatingWidget.showSidebar(
+            edge,
+            floatingWidget.height / 2,
+            false
+        );
+
+        floatingWidget.isPinned = true;
+        floatingWidget.isExpanded = false;
+
+        hideTimer.stop();
+        peekHideTimer.stop();
+    }
+
+    function hide() {
+        floatingWidget.closeQuickActions();
+    }
+
+    function nextSection() {
+        if (!floatingWidget.isSidebarVisible)
+            return;
+
+        let step =
+            floatingWidget.activeEdge === "right"
+                ? -1
+                : 1;
+
+        floatingWidget.activeIndex =
+            Math.max(
+                0,
+                Math.min(
+                    floatingWidget.tabCount - 1,
+                    floatingWidget.activeIndex + step
+                )
+            );
+    }
+
+    function previousSection() {
+        if (!floatingWidget.isSidebarVisible)
+            return;
+
+        let step =
+            floatingWidget.activeEdge === "right"
+                ? 1
+                : -1;
+
+        floatingWidget.activeIndex =
+            Math.max(
+                0,
+                Math.min(
+                    floatingWidget.tabCount - 1,
+                    floatingWidget.activeIndex + step
+                )
+            );
+    }
+
+    function moveForward() {
+    floatingWidget.moveOpenedLayout(1);
+                           }
+
+    function moveBackward() {
+    floatingWidget.moveOpenedLayout(-1);
+                            }
+
+    function expand() {
+        if (!floatingWidget.isSidebarVisible)
+            return;
+
+        floatingWidget.isExpanded = true;
+        hideTimer.stop();
+    }
+
+    function collapse() {
+        if (!floatingWidget.isSidebarVisible)
+            return;
+
+        floatingWidget.isExpanded = false;
+        hideTimer.stop();
+    }
+
+            }
+
             required property var modelData
             screen: modelData
 
@@ -20,29 +131,61 @@ Variants {
             exclusionMode: ExclusionMode.Ignore
             color: "transparent"
 
-            focusable: isSidebarVisible && (!isPinned || (typeof mainHoverTracker !== "undefined" && mainHoverTracker.hovered))
+            focusable: isSidebarVisible && (
+                !isPinned ||
+                (typeof mainHoverTracker !== "undefined" && mainHoverTracker.hovered)
+            )
 
             anchors {
-                top: true; bottom: true; left: true; right: true
+                top: true
+                bottom: true
+                left: true
+                right: true
             }
+
             onIsSidebarVisibleChanged: {
-                if (isSidebarVisible) SysData.prewarm();
+                if (isSidebarVisible)
+                    SysData.prewarm();
             }
 
             property int configRevision: 0
 
-            property string barPosition: (typeof Config !== "undefined" && Config.rawSettings && Config.rawSettings.bar && Config.rawSettings.bar.position !== undefined) ? Config.rawSettings.bar.position : "top"
-            property bool barAutohide: (typeof Config !== "undefined" && Config.rawSettings && Config.rawSettings.bar && Config.rawSettings.bar.autohide !== undefined) ? Config.rawSettings.bar.autohide : false
+            property string barPosition:
+                (typeof Config !== "undefined" &&
+                 Config.rawSettings &&
+                 Config.rawSettings.bar &&
+                 Config.rawSettings.bar.position !== undefined)
+                    ? Config.rawSettings.bar.position
+                    : "top"
+
+            property bool barAutohide:
+                (typeof Config !== "undefined" &&
+                 Config.rawSettings &&
+                 Config.rawSettings.bar &&
+                 Config.rawSettings.bar.autohide !== undefined)
+                    ? Config.rawSettings.bar.autohide
+                    : false
 
             property real barInset: barAutohide ? 0 : s(48)
-            property real topBound: barPosition === "top" ? barInset : 0
-            property real bottomBound: floatingWidget.height - (barPosition === "bottom" ? barInset : 0)
-            property real leftBound: barPosition === "left" ? barInset : 0
-            property real rightBound: floatingWidget.width - (barPosition === "right" ? barInset : 0)
 
-            property real edgeHitSize: Math.max(2, Math.round(s(3)))
+            property real topBound:
+                barPosition === "top" ? barInset : 0
 
-            property var defaultDockSettings: ({
+            property real bottomBound:
+                floatingWidget.height -
+                (barPosition === "bottom" ? barInset : 0)
+
+            property real leftBound:
+                barPosition === "left" ? barInset : 0
+
+            property real rightBound:
+                floatingWidget.width -
+                (barPosition === "right" ? barInset : 0)
+
+            property real edgeHitSize:
+                Math.max(2, Math.round(s(3)))
+
+            readonly property var defaultDockSettings: ({
                 "enabled": true,
                 "position": "bottom",
                 "elementSize": 44,
@@ -51,96 +194,312 @@ Variants {
                 "apps": []
             })
 
-            property var rawDockSettings: {
+            readonly property var rawDockSettings: {
                 let dummy = configRevision;
-                if (typeof Config !== "undefined" && Config.rawSettings && Config.rawSettings.dock) {
+
+                if (typeof Config !== "undefined" &&
+                    Config.rawSettings &&
+                    Config.rawSettings.dock) {
                     return Config.rawSettings.dock;
                 }
-                if (typeof Config !== "undefined" && typeof Config.getSetting === "function") {
-                    return Config.getSetting("dock", defaultDockSettings);
+
+                if (typeof Config !== "undefined" &&
+                    typeof Config.getSetting === "function") {
+                    return Config.getSetting(
+                        "dock",
+                        defaultDockSettings
+                    );
                 }
+
                 return defaultDockSettings;
             }
 
-            property bool dockEnabled: (rawDockSettings && rawDockSettings.enabled !== undefined) ? rawDockSettings.enabled : true
-            property string dockPosition: (rawDockSettings && rawDockSettings.position !== undefined) ? rawDockSettings.position : "bottom"
-            property int dockElementSize: (rawDockSettings && rawDockSettings.elementSize !== undefined) ? rawDockSettings.elementSize : 44
-            property bool dockEditMode: (rawDockSettings && rawDockSettings.editing !== undefined) ? rawDockSettings.editing : false
+            property bool dockEnabled:
+                (rawDockSettings &&
+                 rawDockSettings.enabled !== undefined)
+                    ? rawDockSettings.enabled
+                    : true
 
-            property bool enableScrolling: (rawDockSettings && rawDockSettings.enableScrolling !== undefined) ? Boolean(rawDockSettings.enableScrolling) : false
-            property int dockVisibleElements: (rawDockSettings && rawDockSettings.visibleElements !== undefined && !isNaN(rawDockSettings.visibleElements) && rawDockSettings.visibleElements > 0) ? rawDockSettings.visibleElements : 7
+            property string dockPosition:
+                (rawDockSettings &&
+                 rawDockSettings.position !== undefined)
+                    ? rawDockSettings.position
+                    : "bottom"
 
-            property var dockAppsList: (rawDockSettings && rawDockSettings.apps && Array.isArray(rawDockSettings.apps)) ? rawDockSettings.apps : []
+            property int dockElementSize:
+                (rawDockSettings &&
+                 rawDockSettings.elementSize !== undefined)
+                    ? rawDockSettings.elementSize
+                    : 44
+
+            property bool dockEditMode:
+                (rawDockSettings &&
+                 rawDockSettings.editing !== undefined)
+                    ? rawDockSettings.editing
+                    : false
+
+            property bool enableScrolling:
+                (rawDockSettings &&
+                 rawDockSettings.enableScrolling !== undefined)
+                    ? Boolean(rawDockSettings.enableScrolling)
+                    : false
+
+            property int dockVisibleElements:
+                (rawDockSettings &&
+                 rawDockSettings.visibleElements !== undefined &&
+                 !isNaN(rawDockSettings.visibleElements) &&
+                 rawDockSettings.visibleElements > 0)
+                    ? rawDockSettings.visibleElements
+                    : 7
+
+            property var dockAppsList:
+                (rawDockSettings &&
+                 rawDockSettings.apps &&
+                 Array.isArray(rawDockSettings.apps))
+                    ? rawDockSettings.apps
+                    : []
+
             property int dockItemCount: {
-                if (dockAppsList.length > 0) return dockAppsList.length;
-                if (dockEditMode) return 6;
+                if (dockAppsList.length > 0)
+                    return dockAppsList.length;
+
+                if (dockEditMode)
+                    return 6;
+
                 return 0;
             }
+
             property int effectiveDockItemCount: {
                 if (enableScrolling && dockItemCount > 0) {
-                    return Math.min(dockItemCount, Math.max(1, dockVisibleElements));
+                    return Math.min(
+                        dockItemCount,
+                        Math.max(1, dockVisibleElements)
+                    );
                 }
+
                 return dockItemCount;
             }
-            property bool isDockActive: dockEnabled && (dockItemCount > 0 || dockEditMode)
+
+            property bool isDockActive:
+                dockEnabled &&
+                (dockItemCount > 0 || dockEditMode)
 
             property real dockOuterCornerRadius: {
-                let br = (typeof ThemeBackend !== "undefined" && ThemeBackend.borderRadius !== undefined) ? ThemeBackend.borderRadius : 8;
-                return br <= 16 ? br * 2 : Math.min(32, 32 - 16 * Math.exp(-(br - 16) / 12));
+                let br =
+                    (typeof ThemeBackend !== "undefined" &&
+                     ThemeBackend.borderRadius !== undefined)
+                        ? ThemeBackend.borderRadius
+                        : 8;
+
+                return br <= 16
+                    ? br * 2
+                    : Math.min(
+                        32,
+                        32 - 16 * Math.exp(-(br - 16) / 12)
+                    );
             }
 
             property real dockLength: {
-                if (!isDockActive) return 0;
-                let spacing = dockEditMode ? s(10) : s(8);
+                if (!isDockActive)
+                    return 0;
+
+                let spacing =
+                    dockEditMode ? s(10) : s(8);
+
                 let count = effectiveDockItemCount;
-                let contentLen = count * s(dockElementSize) + Math.max(0, count - 1) * spacing;
-                let baseLen = contentLen + s(20) + (dockOuterCornerRadius * 2) + s(12);
+
+                let contentLen =
+                    count * s(dockElementSize) +
+                    Math.max(0, count - 1) * spacing;
+
+                let baseLen =
+                    contentLen +
+                    s(20) +
+                    (dockOuterCornerRadius * 2) +
+                    s(12);
+
                 return baseLen * 1.2;
             }
 
-            property real dockHStart: Math.max(leftBound, Math.round((floatingWidget.width - dockLength) / 2))
-            property real dockHEnd: Math.min(rightBound, Math.round((floatingWidget.width + dockLength) / 2))
+            property real dockHStart:
+                Math.max(
+                    leftBound,
+                    Math.round(
+                        (floatingWidget.width - dockLength) / 2
+                    )
+                )
 
-            property real dockVStart: Math.max(topBound, Math.round((floatingWidget.height - dockLength) / 2))
-            property real dockVEnd: Math.min(bottomBound, Math.round((floatingWidget.height + dockLength) / 2))
+            property real dockHEnd:
+                Math.min(
+                    rightBound,
+                    Math.round(
+                        (floatingWidget.width + dockLength) / 2
+                    )
+                )
 
-            readonly property bool isDockOnTop: isDockActive && dockPosition === "top"
-            readonly property real topEdgeA_x: leftBound
-            readonly property real topEdgeA_w: (barPosition === "top") ? 0 : (isDockOnTop ? Math.max(0, dockHStart - leftBound) : (rightBound - leftBound))
-            readonly property real topEdgeB_x: isDockOnTop ? dockHEnd : rightBound
-            readonly property real topEdgeB_w: (barPosition === "top" || !isDockOnTop) ? 0 : Math.max(0, rightBound - dockHEnd)
+            property real dockVStart:
+                Math.max(
+                    topBound,
+                    Math.round(
+                        (floatingWidget.height - dockLength) / 2
+                    )
+                )
 
-            readonly property bool isDockOnBottom: isDockActive && dockPosition === "bottom"
-            readonly property real bottomEdgeA_x: leftBound
-            readonly property real bottomEdgeA_w: (barPosition === "bottom") ? 0 : (isDockOnBottom ? Math.max(0, dockHStart - leftBound) : (rightBound - leftBound))
-            readonly property real bottomEdgeB_x: isDockOnBottom ? dockHEnd : rightBound
-            readonly property real bottomEdgeB_w: (barPosition === "bottom" || !isDockOnBottom) ? 0 : Math.max(0, rightBound - dockHEnd)
+            property real dockVEnd:
+                Math.min(
+                    bottomBound,
+                    Math.round(
+                        (floatingWidget.height + dockLength) / 2
+                    )
+                )
 
-            readonly property bool isDockOnLeft: isDockActive && dockPosition === "left"
-            readonly property real leftEdgeA_y: topBound
-            readonly property real leftEdgeA_h: (barPosition === "left") ? 0 : (isDockOnLeft ? Math.max(0, dockVStart - topBound) : (bottomBound - topBound))
-            readonly property real leftEdgeB_y: isDockOnLeft ? dockVEnd : bottomBound
-            readonly property real leftEdgeB_h: (barPosition === "left" || !isDockOnLeft) ? 0 : Math.max(0, bottomBound - dockVEnd)
+            readonly property bool isDockOnTop:
+                isDockActive && dockPosition === "top"
 
-            readonly property bool isDockOnRight: isDockActive && dockPosition === "right"
-            readonly property real rightEdgeA_y: topBound
-            readonly property real rightEdgeA_h: (barPosition === "right") ? 0 : (isDockOnRight ? Math.max(0, dockVStart - topBound) : (bottomBound - topBound))
-            readonly property real rightEdgeB_y: isDockOnRight ? dockVEnd : bottomBound
-            readonly property real rightEdgeB_h: (barPosition === "right" || !isDockOnRight) ? 0 : Math.max(0, bottomBound - dockVEnd)
+            readonly property real topEdgeA_x:
+                leftBound
 
-            readonly property bool isAnyEdgeHovered: topEdgeA.containsMouse || topEdgeB.containsMouse ||
-                                                     bottomEdgeA.containsMouse || bottomEdgeB.containsMouse ||
-                                                     leftEdgeA.containsMouse || leftEdgeB.containsMouse ||
-                                                     rightEdgeA.containsMouse || rightEdgeB.containsMouse
+            readonly property real topEdgeA_w:
+                (barPosition === "top")
+                    ? 0
+                    : (
+                        isDockOnTop
+                            ? Math.max(
+                                0,
+                                dockHStart - leftBound
+                            )
+                            : (rightBound - leftBound)
+                    )
+
+            readonly property real topEdgeB_x:
+                isDockOnTop ? dockHEnd : rightBound
+
+            readonly property real topEdgeB_w:
+                (barPosition === "top" || !isDockOnTop)
+                    ? 0
+                    : Math.max(
+                        0,
+                        rightBound - dockHEnd
+                    )
+
+            readonly property bool isDockOnBottom:
+                isDockActive && dockPosition === "bottom"
+
+            readonly property real bottomEdgeA_x:
+                leftBound
+
+            readonly property real bottomEdgeA_w:
+                (barPosition === "bottom")
+                    ? 0
+                    : (
+                        isDockOnBottom
+                            ? Math.max(
+                                0,
+                                dockHStart - leftBound
+                            )
+                            : (rightBound - leftBound)
+                    )
+
+            readonly property real bottomEdgeB_x:
+                isDockOnBottom ? dockHEnd : rightBound
+
+            readonly property real bottomEdgeB_w:
+                (barPosition === "bottom" || !isDockOnBottom)
+                    ? 0
+                    : Math.max(
+                        0,
+                        rightBound - dockHEnd
+                    )
+
+            readonly property bool isDockOnLeft:
+                isDockActive && dockPosition === "left"
+
+            readonly property real leftEdgeA_y:
+                topBound
+
+            readonly property real leftEdgeA_h:
+                (barPosition === "left")
+                    ? 0
+                    : (
+                        isDockOnLeft
+                            ? Math.max(
+                                0,
+                                dockVStart - topBound
+                            )
+                            : (bottomBound - topBound)
+                    )
+
+            readonly property real leftEdgeB_y:
+                isDockOnLeft ? dockVEnd : bottomBound
+
+            readonly property real leftEdgeB_h:
+                (barPosition === "left" || !isDockOnLeft)
+                    ? 0
+                    : Math.max(
+                        0,
+                        bottomBound - dockVEnd
+                    )
+
+            readonly property bool isDockOnRight:
+                isDockActive && dockPosition === "right"
+
+            readonly property real rightEdgeA_y:
+                topBound
+
+            readonly property real rightEdgeA_h:
+                (barPosition === "right")
+                    ? 0
+                    : (
+                        isDockOnRight
+                            ? Math.max(
+                                0,
+                                dockVStart - topBound
+                            )
+                            : (bottomBound - topBound)
+                    )
+
+            readonly property real rightEdgeB_y:
+                isDockOnRight ? dockVEnd : bottomBound
+
+            readonly property real rightEdgeB_h:
+                (barPosition === "right" || !isDockOnRight)
+                    ? 0
+                    : Math.max(
+                        0,
+                        bottomBound - dockVEnd
+                    )
+
+            readonly property bool isAnyEdgeHovered:
+                topEdgeA.containsMouse ||
+                topEdgeB.containsMouse ||
+                bottomEdgeA.containsMouse ||
+                bottomEdgeB.containsMouse ||
+                leftEdgeA.containsMouse ||
+                leftEdgeB.containsMouse ||
+                rightEdgeA.containsMouse ||
+                rightEdgeB.containsMouse
 
             function handleEdgeEntered(edge, mousePos) {
                 SysData.prewarm();
                 peekHideTimer.stop();
-                if (floatingWidget.isSidebarVisible || floatingWidget.pendingMode === "sidebar") {
-                    floatingWidget.showSidebar(edge, mousePos);
+
+                if (floatingWidget.isSidebarVisible ||
+                    floatingWidget.pendingMode === "sidebar") {
+
+                    floatingWidget.showSidebar(
+                        edge,
+                        mousePos
+                    );
+
                 } else if (floatingWidget.isPeekVisible) {
-                    floatingWidget.showPeek(edge, mousePos);
+
+                    floatingWidget.showPeek(
+                        edge,
+                        mousePos
+                    );
+
                 } else {
+
                     peekShowTimer.pendingShowEdge = edge;
                     peekShowTimer.pendingShowPos = mousePos;
                     peekShowTimer.restart();
@@ -148,11 +507,23 @@ Variants {
             }
 
             function handleEdgePositionChanged(edge, mousePos) {
-                if (floatingWidget.isSidebarVisible || floatingWidget.pendingMode === "sidebar") {
-                    floatingWidget.showSidebar(edge, mousePos);
+                if (floatingWidget.isSidebarVisible ||
+                    floatingWidget.pendingMode === "sidebar") {
+
+                    floatingWidget.showSidebar(
+                        edge,
+                        mousePos
+                    );
+
                 } else if (floatingWidget.isPeekVisible) {
-                    floatingWidget.showPeek(edge, mousePos);
+
+                    floatingWidget.showPeek(
+                        edge,
+                        mousePos
+                    );
+
                 } else {
+
                     peekShowTimer.pendingShowPos = mousePos;
                 }
             }
@@ -163,36 +534,65 @@ Variants {
             }
 
             Connections {
-                target: (typeof Config !== "undefined") ? Config : null
+                target:
+                    (typeof Config !== "undefined")
+                        ? Config
+                        : null
+
                 function onSettingsLoaded() {
                     floatingWidget.configRevision++;
-                    if (typeof Config !== "undefined" && Config.rawSettings && Config.rawSettings.bar) {
-                        if (Config.rawSettings.bar.position !== undefined && Config.rawSettings.bar.position !== floatingWidget.barPosition) {
+
+                    if (typeof Config !== "undefined" &&
+                        Config.rawSettings &&
+                        Config.rawSettings.bar) {
+
+                        if (
+                            Config.rawSettings.bar.position !== undefined &&
+                            Config.rawSettings.bar.position !== floatingWidget.barPosition
+                        ) {
                             floatingWidget.disableAnim = true;
-                            floatingWidget.barPosition = Config.rawSettings.bar.position;
+                            floatingWidget.barPosition =
+                                Config.rawSettings.bar.position;
                             positionChangeAnimTimer.restart();
                         }
-                        if (Config.rawSettings.bar.autohide !== undefined) {
-                            floatingWidget.barAutohide = Config.rawSettings.bar.autohide;
+
+                        if (
+                            Config.rawSettings.bar.autohide !== undefined
+                        ) {
+                            floatingWidget.barAutohide =
+                                Config.rawSettings.bar.autohide;
                         }
                     }
                 }
-                function onDataReadyChanged() { floatingWidget.configRevision++; }
-                function onRawSettingsChanged() { floatingWidget.configRevision++; }
+
+                function onDataReadyChanged() {
+                    floatingWidget.configRevision++;
+                }
+
+                function onRawSettingsChanged() {
+                    floatingWidget.configRevision++;
+                }
             }
 
             Timer {
                 id: initAnimTimer
+
                 interval: 500
                 running: true
-                onTriggered: floatingWidget.disableAnim = false
+
+                onTriggered: {
+                    floatingWidget.disableAnim = false;
+                }
             }
 
             Timer {
                 id: positionChangeAnimTimer
+
                 interval: 350
+
                 onTriggered: {
-                    if (!edgeTransitionTimer.running && !teleportTimer.running) {
+                    if (!edgeTransitionTimer.running &&
+                        !teleportTimer.running) {
                         floatingWidget.disableAnim = false;
                     }
                 }
@@ -200,12 +600,18 @@ Variants {
 
             onBarPositionChanged: {
                 floatingWidget.disableAnim = true;
+
                 if (activeEdge === barPosition) {
-                    if (barPosition === "top") activeEdge = "bottom";
-                    else if (barPosition === "bottom") activeEdge = "top";
-                    else if (barPosition === "left") activeEdge = "right";
-                    else if (barPosition === "right") activeEdge = "left";
+                    if (barPosition === "top")
+                        activeEdge = "bottom";
+                    else if (barPosition === "bottom")
+                        activeEdge = "top";
+                    else if (barPosition === "left")
+                        activeEdge = "right";
+                    else if (barPosition === "right")
+                        activeEdge = "left";
                 }
+
                 positionChangeAnimTimer.restart();
             }
 
@@ -218,9 +624,13 @@ Variants {
 
             Item {
                 id: focusTracker
+
                 focus: true
+
                 onActiveFocusChanged: {
-                    if (!activeFocus && !floatingWidget.isPinned) {
+                    if (!activeFocus &&
+                        !floatingWidget.isPinned) {
+
                         floatingWidget.isExpanded = false;
                         hideTimer.restart();
                     }
@@ -231,18 +641,23 @@ Variants {
             property bool useGraceTimer: false
 
             onIsPinnedChanged: {
-                if (!isPinned) kickTimer();
+                if (!isPinned)
+                    kickTimer();
             }
 
             property int hoveredBars: 0
 
-            property var tabModules: [
+            readonly property var tabModules: [
                 "actions/DrawAction.qml",
                 "actions/SystemUsage.qml",
-                "actions/Timer.qml"
+                "actions/Timer.qml",
+                "actions/Game.qml",
+                "actions/DropShelf.qml",
+                "actions/Music.qml"
             ]
 
-            property int tabCount: Math.max(1, tabModules.length)
+            readonly property int tabCount:
+                Math.max(1, tabModules.length)
 
             Connections {
                 target: FloatingController
@@ -261,104 +676,507 @@ Variants {
             }
 
             function matchesScreen(targetScreen) {
-                return targetScreen && floatingWidget.screen
-                    && (targetScreen === floatingWidget.screen || targetScreen.name === floatingWidget.screen.name);
+                return targetScreen &&
+                    floatingWidget.screen &&
+                    (
+                        targetScreen === floatingWidget.screen ||
+                        targetScreen.name === floatingWidget.screen.name
+                    );
             }
 
             function setIndex(index) {
                 let newIndex = parseInt(index);
-                if (!isNaN(newIndex) && newIndex >= 0 && newIndex < floatingWidget.tabCount) {
+
+                if (!isNaN(newIndex) &&
+                    newIndex >= 0 &&
+                    newIndex < floatingWidget.tabCount) {
+
                     floatingWidget.activeIndex = newIndex;
                 }
             }
 
             function showSystemUsage() {
                 let sysIndex = 1;
-                for (let i = 0; i < floatingWidget.tabModules.length; i++) {
-                    if (floatingWidget.tabModules[i].indexOf("SystemUsage") !== -1) {
+
+                for (
+                    let i = 0;
+                    i < floatingWidget.tabModules.length;
+                    i++
+                ) {
+                    if (
+                        floatingWidget.tabModules[i]
+                            .indexOf("SystemUsage") !== -1
+                    ) {
                         sysIndex = i;
                         break;
                     }
                 }
+
                 floatingWidget.activeIndex = sysIndex;
-                let sideEdge = (floatingWidget.barPosition === "left") ? "right" : "left";
-                let centerPos = floatingWidget.height / 2;
+
+                let sideEdge =
+                    (floatingWidget.barPosition === "left")
+                        ? "right"
+                        : "left";
+
+                let centerPos =
+                    floatingWidget.height / 2;
+
                 floatingWidget.useGraceTimer = true;
-                floatingWidget.showSidebar(sideEdge, centerPos, true);
+
+                floatingWidget.showSidebar(
+                    sideEdge,
+                    centerPos,
+                    true
+                );
+
                 hideTimer.restart();
             }
 
-            function childIntercepts(sequenceStr) {
-                if (!isExpanded) return false;
+            // Main keyboard shortcut behavior.
+            //
+            // CLOSED:
+            //     -> open
+            //     -> expand
+            //     -> pin
+            //
+            // OPEN/PINNED:
+            //     -> unpin
+            //     -> collapse
+            //     -> close
+            function shortcutToggle() {
+                if (
+                    floatingWidget.isSidebarVisible ||
+                    floatingWidget.isPinned
+                ) {
+                    floatingWidget.closeQuickActions();
+                    return;
+                }
 
-                if (typeof moduleRepeater !== "undefined" && activeIndex >= 0 && activeIndex < moduleRepeater.count) {
-                    let loader = moduleRepeater.itemAt(activeIndex);
-                    if (loader && loader.status === Loader.Ready && loader.item) {
-                        if (loader.item.interceptedShortcuts !== undefined) {
-                            return loader.item.interceptedShortcuts.includes(sequenceStr);
+                let edge;
+
+                if (floatingWidget.barPosition === "left") {
+                    edge = "right";
+                } else if (floatingWidget.barPosition === "right") {
+                    edge = "left";
+                } else {
+                    edge = floatingWidget.activeEdge;
+                }
+
+                floatingWidget.isPinned = false;
+
+                // Open only the tab strip. The selected module stays unloaded
+                // until the user explicitly expands it.
+                floatingWidget.showSidebar(
+                    edge,
+                    floatingWidget.height / 2,
+                    false
+                );
+
+                // showSidebar() refuses to open while pinned, so pin after
+                // the sidebar has been made visible.
+                floatingWidget.isPinned = true;
+                floatingWidget.isExpanded = false;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.useGraceTimer = false;
+
+                hideTimer.stop();
+                peekHideTimer.stop();
+            }
+
+            function childIntercepts(sequenceStr) {
+                if (!isExpanded)
+                    return false;
+
+                if (
+                    typeof moduleRepeater !== "undefined" &&
+                    activeIndex >= 0 &&
+                    activeIndex < moduleRepeater.count
+                ) {
+                    let loader =
+                        moduleRepeater.itemAt(activeIndex);
+
+                    if (
+                        loader &&
+                        loader.status === Loader.Ready &&
+                        loader.item
+                    ) {
+                        if (
+                            loader.item.interceptedShortcuts !== undefined
+                        ) {
+                            return loader.item.interceptedShortcuts
+                                .includes(sequenceStr);
                         }
                     }
                 }
+
                 return false;
             }
 
             function kickTimer() {
                 if (!isPinned) {
-                    if ((typeof mainHoverTracker !== "undefined" && mainHoverTracker.hovered) ||
-                        (typeof sidebarDragArea !== "undefined" && (sidebarDragArea.containsMouse || sidebarDragArea.pressed)) ||
-                        (typeof gridMouseArea !== "undefined" && (gridMouseArea.containsMouse || gridMouseArea.pressed)) ||
-                        (typeof peekMouse !== "undefined" && (peekMouse.containsMouse || peekMouse.pressed)) ||
-                        (typeof pinMouse !== "undefined" && pinMouse.containsMouse) ||
-                        (typeof expandMouse !== "undefined" && expandMouse.containsMouse) ||
-                        floatingWidget.hoveredBars > 0) {
+                    if (
+                        (
+                            typeof mainHoverTracker !== "undefined" &&
+                            mainHoverTracker.hovered
+                        ) ||
+                        (
+                            typeof sidebarDragArea !== "undefined" &&
+                            (
+                                sidebarDragArea.containsMouse ||
+                                sidebarDragArea.pressed
+                            )
+                        ) ||
+                        (
+                            typeof gridMouseArea !== "undefined" &&
+                            (
+                                gridMouseArea.containsMouse ||
+                                gridMouseArea.pressed
+                            )
+                        ) ||
+                        (
+                            typeof peekMouse !== "undefined" &&
+                            (
+                                peekMouse.containsMouse ||
+                                peekMouse.pressed
+                            )
+                        ) ||
+                        (
+                            typeof pinMouse !== "undefined" &&
+                            pinMouse.containsMouse
+                        ) ||
+                        (
+                            typeof expandMouse !== "undefined" &&
+                            expandMouse.containsMouse
+                        ) ||
+                        floatingWidget.hoveredBars > 0
+                    ) {
                         return;
                     }
+
                     hideTimer.restart();
                 }
             }
 
-            Shortcut { enabled: floatingWidget.isSidebarVisible && !floatingWidget.childIntercepts("Tab"); sequence: "Tab"; onActivated: { floatingWidget.activeIndex = (floatingWidget.activeIndex + 1) % floatingWidget.tabCount; floatingWidget.kickTimer(); } }
-            Shortcut { enabled: floatingWidget.isSidebarVisible && !floatingWidget.childIntercepts("Shift+Tab"); sequence: "Shift+Tab"; onActivated: { floatingWidget.activeIndex = (floatingWidget.activeIndex + (floatingWidget.tabCount - 1)) % floatingWidget.tabCount; floatingWidget.kickTimer(); } }
-            Shortcut { enabled: floatingWidget.isSidebarVisible && !floatingWidget.childIntercepts("Return"); sequence: "Return"; onActivated: { floatingWidget.isExpanded = !floatingWidget.isExpanded; floatingWidget.kickTimer(); } }
-            Shortcut { enabled: floatingWidget.isSidebarVisible && !floatingWidget.childIntercepts("Enter"); sequence: "Enter"; onActivated: { floatingWidget.isExpanded = !floatingWidget.isExpanded; floatingWidget.kickTimer(); } }
+            // ------------------------------------------------------------
+            // Move the opened layout around the screen.
+            //
+            // On keyboards where Fn+Left/Right generate Home/End:
+            //     Fn+Alt+Left  -> Alt+Home
+            //     Fn+Alt+Right -> Alt+End
+            //
+            // Right = clockwise
+            // Left  = counter-clockwise
+            // ------------------------------------------------------------
+
+
+            // Existing section navigation.
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    !floatingWidget.childIntercepts("Tab")
+
+                sequence: "Tab"
+
+                onActivated: {
+                    floatingWidget.activeIndex =
+                        (
+                            floatingWidget.activeIndex + 1
+                        ) % floatingWidget.tabCount;
+
+                    floatingWidget.kickTimer();
+                }
+            }
 
             Shortcut {
-                enabled: floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") && !floatingWidget.childIntercepts("Left")
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    !floatingWidget.childIntercepts("Shift+Tab")
+
+                sequence: "Shift+Tab"
+
+                onActivated: {
+                    floatingWidget.activeIndex =
+                        (
+                            floatingWidget.activeIndex +
+                            (floatingWidget.tabCount - 1)
+                        ) % floatingWidget.tabCount;
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    !floatingWidget.childIntercepts("Return")
+
+                sequence: "Return"
+
+                onActivated: {
+                    floatingWidget.isExpanded =
+                        !floatingWidget.isExpanded;
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    !floatingWidget.childIntercepts("Enter")
+
+                sequence: "Enter"
+
+                onActivated: {
+                    floatingWidget.isExpanded =
+                        !floatingWidget.isExpanded;
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            // Existing navigation for top/bottom orientation.
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    (
+                        floatingWidget.activeEdge === "bottom" ||
+                        floatingWidget.activeEdge === "top"
+                    ) &&
+                    !floatingWidget.childIntercepts("Left")
+
                 sequence: "Left"
-                onActivated: { floatingWidget.activeIndex = Math.max(0, floatingWidget.activeIndex - 1); floatingWidget.kickTimer(); }
-            }
-            Shortcut {
-                enabled: floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") && !floatingWidget.childIntercepts("Right")
-                sequence: "Right"
-                onActivated: { floatingWidget.activeIndex = Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + 1); floatingWidget.kickTimer(); }
-            }
-            Shortcut {
-                enabled: floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "left" || floatingWidget.activeEdge === "right") && !floatingWidget.childIntercepts("Up")
-                sequence: "Up"
+
                 onActivated: {
-                    let step = floatingWidget.activeEdge === "right" ? 1 : -1;
-                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
-                    floatingWidget.kickTimer();
-                }
-            }
-            Shortcut {
-                enabled: floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "left" || floatingWidget.activeEdge === "right") && !floatingWidget.childIntercepts("Down")
-                sequence: "Down"
-                onActivated: {
-                    let step = floatingWidget.activeEdge === "right" ? -1 : 1;
-                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
+                    floatingWidget.activeIndex =
+                        Math.max(
+                            0,
+                            floatingWidget.activeIndex - 1
+                        );
+
                     floatingWidget.kickTimer();
                 }
             }
 
             Shortcut {
-                enabled: floatingWidget.isSidebarVisible && !floatingWidget.childIntercepts("Escape")
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    (
+                        floatingWidget.activeEdge === "bottom" ||
+                        floatingWidget.activeEdge === "top"
+                    ) &&
+                    !floatingWidget.childIntercepts("Right")
+
+                sequence: "Right"
+
+                onActivated: {
+                    floatingWidget.activeIndex =
+                        Math.min(
+                            floatingWidget.tabCount - 1,
+                            floatingWidget.activeIndex + 1
+                        );
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            // Existing navigation for left/right orientation.
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    (
+                        floatingWidget.activeEdge === "left" ||
+                        floatingWidget.activeEdge === "right"
+                    ) &&
+                    !floatingWidget.childIntercepts("Up")
+
+                sequence: "Up"
+
+                onActivated: {
+                    let step =
+                        floatingWidget.activeEdge === "right"
+                            ? 1
+                            : -1;
+
+                    floatingWidget.activeIndex =
+                        Math.max(
+                            0,
+                            Math.min(
+                                floatingWidget.tabCount - 1,
+                                floatingWidget.activeIndex + step
+                            )
+                        );
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    (
+                        floatingWidget.activeEdge === "left" ||
+                        floatingWidget.activeEdge === "right"
+                    ) &&
+                    !floatingWidget.childIntercepts("Down")
+
+                sequence: "Down"
+
+                onActivated: {
+                    let step =
+                        floatingWidget.activeEdge === "right"
+                            ? -1
+                            : 1;
+
+                    floatingWidget.activeIndex =
+                        Math.max(
+                            0,
+                            Math.min(
+                                floatingWidget.tabCount - 1,
+                                floatingWidget.activeIndex + step
+                            )
+                        );
+
+                    floatingWidget.kickTimer();
+                }
+            }
+
+            // ------------------------------------------------------------
+            // NEW: Ctrl+Up / Ctrl+Down section navigation.
+            // These deliberately use Ctrl so that games/modules can still
+            // consume plain Up/Down.
+            // ------------------------------------------------------------
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible
+
+                sequence: "Ctrl+Up"
+
+                onActivated: {
+                    let step =
+                        floatingWidget.activeEdge === "right"
+                            ? 1
+                            : -1;
+
+                    floatingWidget.activeIndex =
+                        Math.max(
+                            0,
+                            Math.min(
+                                floatingWidget.tabCount - 1,
+                                floatingWidget.activeIndex + step
+                            )
+                        );
+                }
+            }
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible
+
+                sequence: "Ctrl+Down"
+
+                onActivated: {
+                    let step =
+                        floatingWidget.activeEdge === "right"
+                            ? -1
+                            : 1;
+
+                    floatingWidget.activeIndex =
+                        Math.max(
+                            0,
+                            Math.min(
+                                floatingWidget.tabCount - 1,
+                                floatingWidget.activeIndex + step
+                            )
+                        );
+                }
+            }
+
+            // ------------------------------------------------------------
+            // NEW: Ctrl+Left / Ctrl+Right expansion control.
+            //
+            // If the sidebar is physically LEFT:
+            //     Ctrl+Right = open/expand
+            //     Ctrl+Left  = close/collapse
+            //
+            // If the sidebar is physically RIGHT:
+            //     Ctrl+Left  = open/expand
+            //     Ctrl+Right = close/collapse
+            // ------------------------------------------------------------
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible
+
+                sequence: "Ctrl+Left"
+
+                onActivated: {
+                    if (floatingWidget.activeEdge === "right") {
+                        // Sidebar is on the right.
+                        // Left points inward -> expand.
+                        floatingWidget.isExpanded = true;
+                        hideTimer.stop();
+                    } else if (
+                        floatingWidget.activeEdge === "left"
+                    ) {
+                        // Sidebar is on the left.
+                        // Left points outward -> collapse.
+                        floatingWidget.isExpanded = false;
+
+                        if (floatingWidget.isPinned) {
+                            hideTimer.stop();
+                        } else {
+                            floatingWidget.kickTimer();
+                        }
+                    }
+                }
+            }
+
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible
+
+                sequence: "Ctrl+Right"
+
+                onActivated: {
+                    if (floatingWidget.activeEdge === "left") {
+                        // Sidebar is on the left.
+                        // Right points inward -> expand.
+                        floatingWidget.isExpanded = true;
+                        hideTimer.stop();
+                    } else if (
+                        floatingWidget.activeEdge === "right"
+                    ) {
+                        // Sidebar is on the right.
+                        // Right points outward -> collapse.
+                        floatingWidget.isExpanded = false;
+
+                        if (floatingWidget.isPinned) {
+                            hideTimer.stop();
+                        } else {
+                            floatingWidget.kickTimer();
+                        }
+                    }
+                }
+            }
+
+            // Escape keeps the original behavior.
+            Shortcut {
+                enabled:
+                    floatingWidget.isSidebarVisible &&
+                    !floatingWidget.childIntercepts("Escape")
+
                 sequence: "Escape"
+
                 onActivated: {
                     if (floatingWidget.isExpanded) {
                         floatingWidget.isExpanded = false;
                         floatingWidget.kickTimer();
+
                     } else if (!floatingWidget.isPinned) {
+
                         floatingWidget.isSidebarVisible = false;
                         floatingWidget.isPeekVisible = true;
                         peekHideTimer.restart();
@@ -366,7 +1184,6 @@ Variants {
                 }
             }
 
-            property real baseScale: Scaler.baseScale
             function s(val) {
                 let res = Scaler.s(val);
                 return isNaN(res) ? val : res;
@@ -375,19 +1192,44 @@ Variants {
             property int activeIndex: 0
             property bool isExpanded: false
 
-            property var currentLayoutTemplate: [{x: 0, y: 0, w: 1, h: 1}]
+            property var currentLayoutTemplate: [
+                {
+                    x: 0,
+                    y: 0,
+                    w: 1,
+                    h: 1
+                }
+            ]
 
-            function evaluateDrag(gpStartX, gpStartY, gpMouseX, gpMouseY) {
+            function evaluateDrag(
+                gpStartX,
+                gpStartY,
+                gpMouseX,
+                gpMouseY
+            ) {
                 let delta = 0;
-                if (activeEdge === "left") delta = gpMouseX - gpStartX;
-                else if (activeEdge === "right") delta = gpStartX - gpMouseX;
-                else if (activeEdge === "bottom") delta = gpStartY - gpMouseY;
-                else if (activeEdge === "top") delta = gpMouseY - gpStartY;
 
-                if (delta > s(30) && !isExpanded) {
+                if (activeEdge === "left")
+                    delta = gpMouseX - gpStartX;
+                else if (activeEdge === "right")
+                    delta = gpStartX - gpMouseX;
+                else if (activeEdge === "bottom")
+                    delta = gpStartY - gpMouseY;
+                else if (activeEdge === "top")
+                    delta = gpMouseY - gpStartY;
+
+                if (
+                    delta > s(30) &&
+                    !isExpanded
+                ) {
                     isExpanded = true;
-                } else if (delta < -s(30) && (isExpanded || isSidebarVisible)) {
+
+                } else if (
+                    delta < -s(30) &&
+                    (isExpanded || isSidebarVisible)
+                ) {
                     isExpanded = false;
+
                     if (!isPinned) {
                         isSidebarVisible = false;
                         isPeekVisible = true;
@@ -398,22 +1240,36 @@ Variants {
 
             property real containerRadius: s(16)
             property real outerCornerRadius: s(24)
-            property real edgeBleed: Math.max(2, Math.ceil(s(2)))
+            property real edgeBleed:
+                Math.max(2, Math.ceil(s(2)))
 
             property real h_in: s(26)
             property real h_ac: s(86)
             property real itemSpacing: s(7)
 
             property real buttonSize: s(18)
-            property real controlAreaHeight: buttonSize * 2 + s(10)
 
-            property real barOffsetY: activeEdge === "left" ? (controlAreaHeight + itemSpacing) : 0
+            property real controlAreaHeight:
+                buttonSize * 2 + s(10)
+
+            property real barOffsetY:
+                activeEdge === "left"
+                    ? (controlAreaHeight + itemSpacing)
+                    : 0
 
             function getTargetY(idx, activeIdx) {
                 let y = 0;
+
                 for (let i = 0; i < idx; i++) {
-                    y += (i === activeIdx ? h_ac : h_in) + itemSpacing;
+                    y +=
+                        (
+                            i === activeIdx
+                                ? h_ac
+                                : h_in
+                        ) +
+                        itemSpacing;
                 }
+
                 return y;
             }
 
@@ -421,80 +1277,184 @@ Variants {
             property real baseExpandedExtraLength: s(200)
             property real expandedPadding: s(4)
 
-            property real targetExpandedExtraLength: baseExpandedExtraLength
+            property real targetExpandedExtraLength:
+                baseExpandedExtraLength
 
-            property real expandedWidth: baseExpandedWidth
-            property real expandedExtraLength: baseExpandedExtraLength
+            property real expandedWidth:
+                baseExpandedWidth
 
-            Behavior on expandedWidth { enabled: !floatingWidget.disableAnim; NumberAnimation { duration: 450; easing.type: Easing.OutQuart } }
-            Behavior on expandedExtraLength { enabled: !floatingWidget.disableAnim; NumberAnimation { duration: 450; easing.type: Easing.OutQuart } }
+            property real expandedExtraLength:
+                baseExpandedExtraLength
 
-            property real expandProgress: isExpanded ? 1.0 : 0.0
+            Behavior on expandedWidth {
+                enabled: !floatingWidget.disableAnim
+
+                NumberAnimation {
+                    duration: 450
+                    easing.type: Easing.OutQuart
+                }
+            }
+
+            Behavior on expandedExtraLength {
+                enabled: !floatingWidget.disableAnim
+
+                NumberAnimation {
+                    duration: 450
+                    easing.type: Easing.OutQuart
+                }
+            }
+
+            property real expandProgress:
+                isExpanded ? 1.0 : 0.0
+
             Behavior on expandProgress {
                 enabled: !floatingWidget.disableAnim
-                NumberAnimation { duration: 450; easing.type: Easing.OutQuart }
+
+                NumberAnimation {
+                    duration: 450
+                    easing.type: Easing.OutQuart
+                }
             }
 
-            property real visibleProgress: isSidebarVisible ? 1.0 : 0.0
+            property real visibleProgress:
+                isSidebarVisible ? 1.0 : 0.0
+
             Behavior on visibleProgress {
                 enabled: !floatingWidget.disableAnim
-                NumberAnimation { duration: 380; easing.type: Easing.OutQuart }
+
+                NumberAnimation {
+                    duration: 380
+                    easing.type: Easing.OutQuart
+                }
             }
 
-            property real currentExtraWidth: (expandedWidth + expandedPadding) * expandProgress
-            property real currentExtraLength: expandedExtraLength * expandProgress
+            property real currentExtraWidth:
+                (expandedWidth + expandedPadding) *
+                expandProgress
 
-            property real totalSidebarWidth: sidebarW + currentExtraWidth
+            property real currentExtraLength:
+                expandedExtraLength *
+                expandProgress
 
             property var activeMaskAABB: {
-                if (!floatingWidget.isSidebarVisible && floatingWidget.visibleProgress <= 0.001) return Qt.rect(0, 0, 0, 0);
+                if (
+                    !floatingWidget.isSidebarVisible &&
+                    floatingWidget.visibleProgress <= 0.001
+                ) {
+                    return Qt.rect(
+                        0,
+                        0,
+                        0,
+                        0
+                    );
+                }
+
                 let cw = sidebarContainer.width;
                 let ch = sidebarContainer.height;
-                let cx = sidebarContainer.x + cw / 2;
-                let cy = sidebarContainer.y + ch / 2;
 
-                let innerW = floatingWidget.sidebarW + floatingWidget.currentExtraWidth;
-                let innerH = floatingWidget.baseSidebarH + floatingWidget.currentExtraLength;
+                let cx =
+                    sidebarContainer.x +
+                    cw / 2;
 
-                let outerR = floatingWidget.outerCornerRadius;
-                let buffer = floatingWidget.s(6);
+                let cy =
+                    sidebarContainer.y +
+                    ch / 2;
 
-                let relMinX = -cw / 2 - buffer;
-                let relMaxX = -cw / 2 + innerW + buffer;
-                let relMinY = -innerH / 2 - outerR - buffer;
-                let relMaxY = innerH / 2 + outerR + buffer;
+                let innerW =
+                    floatingWidget.sidebarW +
+                    floatingWidget.currentExtraWidth;
 
-                let rot = floatingWidget.targetRotation;
-                let aabbX = 0, aabbY = 0, aabbW = 0, aabbH = 0;
+                let innerH =
+                    floatingWidget.baseSidebarH +
+                    floatingWidget.currentExtraLength;
+
+                let outerR =
+                    floatingWidget.outerCornerRadius;
+
+                let buffer =
+                    floatingWidget.s(6);
+
+                let relMinX =
+                    -cw / 2 -
+                    buffer;
+
+                let relMaxX =
+                    -cw / 2 +
+                    innerW +
+                    buffer;
+
+                let relMinY =
+                    -innerH / 2 -
+                    outerR -
+                    buffer;
+
+                let relMaxY =
+                    innerH / 2 +
+                    outerR +
+                    buffer;
+
+                let rot =
+                    floatingWidget.targetRotation;
+
+                let aabbX = 0;
+                let aabbY = 0;
+                let aabbW = 0;
+                let aabbH = 0;
 
                 if (rot === 0) {
+
                     aabbX = cx + relMinX;
                     aabbY = cy + relMinY;
                     aabbW = relMaxX - relMinX;
                     aabbH = relMaxY - relMinY;
+
                 } else if (rot === 180) {
+
                     aabbX = cx - relMaxX;
                     aabbY = cy - relMaxY;
                     aabbW = relMaxX - relMinX;
                     aabbH = relMaxY - relMinY;
+
                 } else if (rot === -90) {
+
                     aabbX = cx + relMinY;
                     aabbY = cy - relMaxX;
                     aabbW = relMaxY - relMinY;
                     aabbH = relMaxX - relMinX;
+
                 } else if (rot === 90) {
+
                     aabbX = cx - relMaxY;
                     aabbY = cy + relMinX;
                     aabbW = relMaxY - relMinY;
                     aabbH = relMaxX - relMinX;
+
                 } else {
-                    aabbW = innerW + buffer * 2;
-                    aabbH = innerH + outerR * 2 + buffer * 2;
-                    aabbX = cx - aabbW / 2;
-                    aabbY = cy - aabbH / 2;
+
+                    aabbW =
+                        innerW +
+                        buffer * 2;
+
+                    aabbH =
+                        innerH +
+                        outerR * 2 +
+                        buffer * 2;
+
+                    aabbX =
+                        cx -
+                        aabbW / 2;
+
+                    aabbY =
+                        cy -
+                        aabbH / 2;
                 }
 
-                return Qt.rect(aabbX, aabbY, aabbW, aabbH);
+                return Qt.rect(
+                    aabbX,
+                    aabbY,
+                    aabbW,
+                    aabbH
+                );
             }
 
             mask: Region {
@@ -502,96 +1462,210 @@ Variants {
                     x: floatingWidget.topEdgeA_x
                     y: topBound
                     width: floatingWidget.topEdgeA_w
-                    height: floatingWidget.topEdgeA_w > 0 ? floatingWidget.edgeHitSize : 0
+                    height:
+                        floatingWidget.topEdgeA_w > 0
+                            ? floatingWidget.edgeHitSize
+                            : 0
                 }
+
                 Region {
                     x: floatingWidget.topEdgeB_x
                     y: topBound
                     width: floatingWidget.topEdgeB_w
-                    height: floatingWidget.topEdgeB_w > 0 ? floatingWidget.edgeHitSize : 0
+                    height:
+                        floatingWidget.topEdgeB_w > 0
+                            ? floatingWidget.edgeHitSize
+                            : 0
                 }
+
                 Region {
                     x: floatingWidget.bottomEdgeA_x
-                    y: bottomBound - floatingWidget.edgeHitSize
-                    width: floatingWidget.bottomEdgeA_w
-                    height: floatingWidget.bottomEdgeA_w > 0 ? floatingWidget.edgeHitSize : 0
+                    y:
+                        bottomBound -
+                        floatingWidget.edgeHitSize
+                    width:
+                        floatingWidget.bottomEdgeA_w
+                    height:
+                        floatingWidget.bottomEdgeA_w > 0
+                            ? floatingWidget.edgeHitSize
+                            : 0
                 }
+
                 Region {
                     x: floatingWidget.bottomEdgeB_x
-                    y: bottomBound - floatingWidget.edgeHitSize
-                    width: floatingWidget.bottomEdgeB_w
-                    height: floatingWidget.bottomEdgeB_w > 0 ? floatingWidget.edgeHitSize : 0
+                    y:
+                        bottomBound -
+                        floatingWidget.edgeHitSize
+                    width:
+                        floatingWidget.bottomEdgeB_w
+                    height:
+                        floatingWidget.bottomEdgeB_w > 0
+                            ? floatingWidget.edgeHitSize
+                            : 0
                 }
+
                 Region {
                     x: leftBound
                     y: floatingWidget.leftEdgeA_y
                     width: floatingWidget.edgeHitSize
                     height: floatingWidget.leftEdgeA_h
                 }
+
                 Region {
                     x: leftBound
                     y: floatingWidget.leftEdgeB_y
                     width: floatingWidget.edgeHitSize
                     height: floatingWidget.leftEdgeB_h
                 }
+
                 Region {
-                    x: rightBound - floatingWidget.edgeHitSize
+                    x:
+                        rightBound -
+                        floatingWidget.edgeHitSize
                     y: floatingWidget.rightEdgeA_y
                     width: floatingWidget.edgeHitSize
                     height: floatingWidget.rightEdgeA_h
                 }
+
                 Region {
-                    x: rightBound - floatingWidget.edgeHitSize
+                    x:
+                        rightBound -
+                        floatingWidget.edgeHitSize
                     y: floatingWidget.rightEdgeB_y
                     width: floatingWidget.edgeHitSize
                     height: floatingWidget.rightEdgeB_h
                 }
 
                 Region {
-                    x: floatingWidget.isPeekVisible ? peekBar.x - floatingWidget.s(8) : 0
-                    y: floatingWidget.isPeekVisible ? peekBar.y - floatingWidget.s(8) : 0
-                    width: floatingWidget.isPeekVisible ? peekBar.width + floatingWidget.s(16) : 0
-                    height: floatingWidget.isPeekVisible ? peekBar.height + floatingWidget.s(16) : 0
+                    x:
+                        floatingWidget.isPeekVisible
+                            ? peekBar.x - floatingWidget.s(8)
+                            : 0
+
+                    y:
+                        floatingWidget.isPeekVisible
+                            ? peekBar.y - floatingWidget.s(8)
+                            : 0
+
+                    width:
+                        floatingWidget.isPeekVisible
+                            ? peekBar.width + floatingWidget.s(16)
+                            : 0
+
+                    height:
+                        floatingWidget.isPeekVisible
+                            ? peekBar.height + floatingWidget.s(16)
+                            : 0
                 }
 
                 Region {
-                    x: (floatingWidget.isSidebarVisible || floatingWidget.visibleProgress > 0.001) ? floatingWidget.activeMaskAABB.x : 0
-                    y: (floatingWidget.isSidebarVisible || floatingWidget.visibleProgress > 0.001) ? floatingWidget.activeMaskAABB.y : 0
-                    width: (floatingWidget.isSidebarVisible || floatingWidget.visibleProgress > 0.001) ? floatingWidget.activeMaskAABB.width : 0
-                    height: (floatingWidget.isSidebarVisible || floatingWidget.visibleProgress > 0.001) ? floatingWidget.activeMaskAABB.height : 0
+                    x:
+                        (
+                            floatingWidget.isSidebarVisible ||
+                            floatingWidget.visibleProgress > 0.001
+                        )
+                            ? floatingWidget.activeMaskAABB.x
+                            : 0
+
+                    y:
+                        (
+                            floatingWidget.isSidebarVisible ||
+                            floatingWidget.visibleProgress > 0.001
+                        )
+                            ? floatingWidget.activeMaskAABB.y
+                            : 0
+
+                    width:
+                        (
+                            floatingWidget.isSidebarVisible ||
+                            floatingWidget.visibleProgress > 0.001
+                        )
+                            ? floatingWidget.activeMaskAABB.width
+                            : 0
+
+                    height:
+                        (
+                            floatingWidget.isSidebarVisible ||
+                            floatingWidget.visibleProgress > 0.001
+                        )
+                            ? floatingWidget.activeMaskAABB.height
+                            : 0
                 }
             }
 
             function safeClampX(pos, margin) {
-                let minCenter = leftBound + margin;
-                let maxCenter = rightBound - margin;
+                let minCenter =
+                    leftBound + margin;
+
+                let maxCenter =
+                    rightBound - margin;
+
                 if (minCenter <= maxCenter) {
-                    return Math.max(minCenter, Math.min(maxCenter, pos));
-                } else {
-                    return (leftBound + rightBound) / 2;
+                    return Math.max(
+                        minCenter,
+                        Math.min(
+                            maxCenter,
+                            pos
+                        )
+                    );
                 }
+
+                return (
+                    leftBound +
+                    rightBound
+                ) / 2;
             }
 
             function safeClampY(pos, margin) {
-                let minCenter = topBound + margin;
-                let maxCenter = bottomBound - margin;
+                let minCenter =
+                    topBound + margin;
+
+                let maxCenter =
+                    bottomBound - margin;
+
                 if (minCenter <= maxCenter) {
-                    return Math.max(minCenter, Math.min(maxCenter, pos));
-                } else {
-                    return (topBound + bottomBound) / 2;
+                    return Math.max(
+                        minCenter,
+                        Math.min(
+                            maxCenter,
+                            pos
+                        )
+                    );
                 }
+
+                return (
+                    topBound +
+                    bottomBound
+                ) / 2;
             }
 
             property real targetEdgeMargin: {
-                let length = baseSidebarH;
+                let length =
+                    baseSidebarH;
+
                 if (isExpanded) {
-                    length += targetExpandedExtraLength;
+                    length +=
+                        targetExpandedExtraLength;
                 }
-                return (length / 2) + outerCornerRadius + s(5);
+
+                return (
+                    length / 2
+                ) +
+                outerCornerRadius +
+                s(5);
             }
 
-            property real clampedCenterX: safeClampX(currentPos, targetEdgeMargin)
-            property real clampedCenterY: safeClampY(currentPos, targetEdgeMargin)
+            property real clampedCenterX:
+                safeClampX(
+                    currentPos,
+                    targetEdgeMargin
+                )
+
+            property real clampedCenterY:
+                safeClampY(
+                    currentPos,
+                    targetEdgeMargin
+                )
 
             property string pendingEdge: ""
             property real pendingPos: 0
@@ -600,30 +1674,49 @@ Variants {
 
             Timer {
                 id: edgeTransitionTimer
+
                 interval: 350
+
                 onTriggered: {
                     floatingWidget.disableAnim = true;
-                    floatingWidget.activeEdge = floatingWidget.pendingEdge;
-                    floatingWidget.currentPos = floatingWidget.pendingPos;
+
+                    floatingWidget.activeEdge =
+                        floatingWidget.pendingEdge;
+
+                    floatingWidget.currentPos =
+                        floatingWidget.pendingPos;
+
                     teleportTimer.restart();
                 }
             }
 
             Timer {
                 id: teleportTimer
+
                 interval: 32
+
                 onTriggered: {
                     floatingWidget.disableAnim = false;
-                    if (floatingWidget.pendingMode === "sidebar") {
+
+                    if (
+                        floatingWidget.pendingMode ===
+                        "sidebar"
+                    ) {
                         floatingWidget.isSidebarVisible = true;
-                        floatingWidget.isExpanded = floatingWidget.pendingWasExpanded;
+                        floatingWidget.isExpanded =
+                            floatingWidget.pendingWasExpanded;
                         floatingWidget.isPeekVisible = false;
                         hideTimer.restart();
-                    } else if (floatingWidget.pendingMode === "peek") {
+
+                    } else if (
+                        floatingWidget.pendingMode ===
+                        "peek"
+                    ) {
                         floatingWidget.isPeekVisible = true;
                         floatingWidget.isSidebarVisible = false;
                         floatingWidget.isExpanded = false;
                     }
+
                     floatingWidget.pendingMode = "";
                 }
             }
@@ -632,85 +1725,241 @@ Variants {
             property bool isPeekVisible: false
             property bool disableAnim: true
 
-            property string activeEdge: barPosition === "left" ? "right" : "left"
-            property real currentPos: (activeEdge === "left" || activeEdge === "right") ? (floatingWidget.height / 2) : (floatingWidget.width / 2)
+            property string activeEdge:
+                barPosition === "left"
+                    ? "right"
+                    : "left"
+
+            property real currentPos:
+                (
+                    activeEdge === "left" ||
+                    activeEdge === "right"
+                )
+                    ? (floatingWidget.height / 2)
+                    : (floatingWidget.width / 2)
 
             property real baseSidebarH: {
-                let count = floatingWidget.tabCount;
-                let activeTabH = count > 0 ? floatingWidget.h_ac : 0;
-                let inactiveTabsH = Math.max(0, count - 1) * floatingWidget.h_in;
-                let tabsSpacing = Math.max(0, count - 1) * floatingWidget.itemSpacing;
+                let count =
+                    floatingWidget.tabCount;
 
-                let controlSpacing = count > 0 ? floatingWidget.itemSpacing : 0;
-                let margins = floatingWidget.s(12);
+                let activeTabH =
+                    count > 0
+                        ? floatingWidget.h_ac
+                        : 0;
 
-                return floatingWidget.controlAreaHeight + controlSpacing + activeTabH + inactiveTabsH + tabsSpacing + margins;
+                let inactiveTabsH =
+                    Math.max(
+                        0,
+                        count - 1
+                    ) * floatingWidget.h_in;
+
+                let tabsSpacing =
+                    Math.max(
+                        0,
+                        count - 1
+                    ) * floatingWidget.itemSpacing;
+
+                let controlSpacing =
+                    count > 0
+                        ? floatingWidget.itemSpacing
+                        : 0;
+
+                let margins =
+                    floatingWidget.s(12);
+
+                return (
+                    floatingWidget.controlAreaHeight +
+                    controlSpacing +
+                    activeTabH +
+                    inactiveTabsH +
+                    tabsSpacing +
+                    margins
+                );
             }
 
-            property real sidebarW: Math.round(s(31))
+            property real sidebarW:
+                Math.round(s(31))
 
             property real sidebarTargetX: {
                 if (activeEdge === "left") {
-                    let hiddenX = leftBound - sidebarW - s(20);
-                    let shownX = Math.round(leftBound);
-                    return hiddenX + (shownX - hiddenX) * visibleProgress;
+
+                    let hiddenX =
+                        leftBound -
+                        sidebarW -
+                        s(20);
+
+                    let shownX =
+                        Math.round(leftBound);
+
+                    return (
+                        hiddenX +
+                        (
+                            shownX -
+                            hiddenX
+                        ) *
+                        visibleProgress
+                    );
                 }
+
                 if (activeEdge === "right") {
-                    let hiddenX = rightBound + s(20);
-                    let shownX = Math.round(rightBound - sidebarW);
-                    return hiddenX + (shownX - hiddenX) * visibleProgress;
+
+                    let hiddenX =
+                        rightBound +
+                        s(20);
+
+                    let shownX =
+                        Math.round(
+                            rightBound -
+                            sidebarW
+                        );
+
+                    return (
+                        hiddenX +
+                        (
+                            shownX -
+                            hiddenX
+                        ) *
+                        visibleProgress
+                    );
                 }
-                if (activeEdge === "bottom" || activeEdge === "top") return Math.round(clampedCenterX - sidebarW / 2);
+
+                if (
+                    activeEdge === "bottom" ||
+                    activeEdge === "top"
+                ) {
+                    return Math.round(
+                        clampedCenterX -
+                        sidebarW / 2
+                    );
+                }
+
                 return 0;
             }
 
             property real sidebarTargetY: {
-                if (activeEdge === "left" || activeEdge === "right") return Math.round(clampedCenterY - baseSidebarH / 2);
+                if (
+                    activeEdge === "left" ||
+                    activeEdge === "right"
+                ) {
+                    return Math.round(
+                        clampedCenterY -
+                        baseSidebarH / 2
+                    );
+                }
+
                 if (activeEdge === "bottom") {
-                    let hiddenY = bottomBound + s(10) - baseSidebarH / 2 + sidebarW / 2;
-                    let shownY = Math.round(bottomBound - sidebarW / 2 - baseSidebarH / 2);
-                    return hiddenY + (shownY - hiddenY) * visibleProgress;
+
+                    let hiddenY =
+                        bottomBound +
+                        s(10) -
+                        baseSidebarH / 2 +
+                        sidebarW / 2;
+
+                    let shownY =
+                        Math.round(
+                            bottomBound -
+                            sidebarW / 2 -
+                            baseSidebarH / 2
+                        );
+
+                    return (
+                        hiddenY +
+                        (
+                            shownY -
+                            hiddenY
+                        ) *
+                        visibleProgress
+                    );
                 }
+
                 if (activeEdge === "top") {
-                    let hiddenY = topBound - baseSidebarH - s(20);
-                    let shownY = Math.round(topBound + sidebarW / 2 - baseSidebarH / 2);
-                    return hiddenY + (shownY - hiddenY) * visibleProgress;
+
+                    let hiddenY =
+                        topBound -
+                        baseSidebarH -
+                        s(20);
+
+                    let shownY =
+                        Math.round(
+                            topBound +
+                            sidebarW / 2 -
+                            baseSidebarH / 2
+                        );
+
+                    return (
+                        hiddenY +
+                        (
+                            shownY -
+                            hiddenY
+                        ) *
+                        visibleProgress
+                    );
                 }
+
                 return 0;
             }
 
             property real targetRotation: {
-                if (activeEdge === "left") return 0;
-                if (activeEdge === "right") return 180;
-                if (activeEdge === "bottom") return -90;
-                if (activeEdge === "top") return 90;
+                if (activeEdge === "left")
+                    return 0;
+
+                if (activeEdge === "right")
+                    return 180;
+
+                if (activeEdge === "bottom")
+                    return -90;
+
+                if (activeEdge === "top")
+                    return 90;
+
                 return 0;
             }
 
             function showPeek(edge, pos) {
                 SysData.prewarm();
-                if (isPinned || isSidebarVisible || pendingMode === "sidebar" || edge === barPosition) return;
+
+                if (
+                    isPinned ||
+                    isSidebarVisible ||
+                    pendingMode === "sidebar" ||
+                    edge === barPosition
+                ) {
+                    return;
+                }
 
                 if (activeEdge !== edge) {
-                    if (isPeekVisible || edgeTransitionTimer.running) {
+
+                    if (
+                        isPeekVisible ||
+                        edgeTransitionTimer.running
+                    ) {
                         pendingEdge = edge;
                         pendingPos = pos;
                         pendingMode = "peek";
 
-                        if (!edgeTransitionTimer.running) {
+                        if (
+                            !edgeTransitionTimer.running
+                        ) {
                             isPeekVisible = false;
                             edgeTransitionTimer.restart();
                         }
+
                     } else {
+
                         disableAnim = true;
                         activeEdge = edge;
                         currentPos = pos;
                         pendingMode = "peek";
                         teleportTimer.restart();
                     }
+
                     return;
+
                 } else {
-                    if (edgeTransitionTimer.running) {
+
+                    if (
+                        edgeTransitionTimer.running
+                    ) {
                         edgeTransitionTimer.stop();
                         pendingMode = "";
                     }
@@ -721,25 +1970,175 @@ Variants {
                 peekHideTimer.stop();
             }
 
+            // Move an already-open QuickAction around the screen.
+            // The current position is converted to a 0..1 ratio along the
+            // current edge, then mapped to the same relative position on
+            // the destination edge.
+            //
+            // Positive step  = clockwise
+            // Negative step  = counter-clockwise
+            function moveOpenedLayout(step) {
+                if (!floatingWidget.isSidebarVisible)
+                    return;
+
+                // Treat the four edges as one continuous perimeter.
+                //
+                // Perimeter coordinate:
+                //   0.00 = top-left
+                //   1.00 = top-right
+                //   2.00 = bottom-right
+                //   3.00 = bottom-left
+                //   4.00 = top-left again
+                //
+                // Every shortcut press moves exactly 25% of one screen edge.
+
+                let xSpan = Math.max(
+                    1,
+                    floatingWidget.rightBound -
+                    floatingWidget.leftBound
+                );
+
+                let ySpan = Math.max(
+                    1,
+                    floatingWidget.bottomBound -
+                    floatingWidget.topBound
+                );
+
+                let t = 0;
+
+                if (floatingWidget.activeEdge === "top") {
+                    t =
+                        (
+                            floatingWidget.currentPos -
+                            floatingWidget.leftBound
+                        ) / xSpan;
+
+                } else if (floatingWidget.activeEdge === "right") {
+                    t =
+                        1 +
+                        (
+                            floatingWidget.currentPos -
+                            floatingWidget.topBound
+                        ) / ySpan;
+
+                } else if (floatingWidget.activeEdge === "bottom") {
+                    t =
+                        2 +
+                        (
+                            floatingWidget.rightBound -
+                            floatingWidget.currentPos
+                        ) / xSpan;
+
+                } else if (floatingWidget.activeEdge === "left") {
+                    t =
+                        3 +
+                        (
+                            floatingWidget.bottomBound -
+                            floatingWidget.currentPos
+                        ) / ySpan;
+                }
+
+                // Keep it in [0, 4).
+                t =
+                    (
+                        t % 4 + 4
+                    ) % 4;
+
+                // One press = exactly 25% of an edge.
+                t += step * 0.25;
+
+                t =
+                    (
+                        t % 4 + 4
+                    ) % 4;
+
+                let nextEdge = "";
+                let nextPos = 0;
+
+                if (t < 1) {
+                    nextEdge = "top";
+                    nextPos =
+                        floatingWidget.leftBound +
+                        t * xSpan;
+
+                } else if (t < 2) {
+                    nextEdge = "right";
+                    nextPos =
+                        floatingWidget.topBound +
+                        (t - 1) * ySpan;
+
+                } else if (t < 3) {
+                    nextEdge = "bottom";
+                    nextPos =
+                        floatingWidget.rightBound -
+                        (t - 2) * xSpan;
+
+                } else {
+                    nextEdge = "left";
+                    nextPos =
+                        floatingWidget.bottomBound -
+                        (t - 3) * ySpan;
+                }
+
+                edgeTransitionTimer.stop();
+                teleportTimer.stop();
+
+                floatingWidget.pendingEdge = "";
+                floatingWidget.pendingPos = 0;
+                floatingWidget.pendingMode = "";
+
+                floatingWidget.disableAnim = false;
+                floatingWidget.currentPos = nextPos;
+                floatingWidget.activeEdge = nextEdge;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.isSidebarVisible = true;
+
+                if (floatingWidget.isPinned)
+                    hideTimer.stop();
+                else
+                    floatingWidget.kickTimer();
+            }
             function showSidebar(edge, pos, expand) {
                 SysData.prewarm();
-                if (isPinned || edge === barPosition) return;
-                let shouldExpand = (typeof expand === "boolean") ? expand : isExpanded;
+
+                if (
+                    isPinned ||
+                    edge === barPosition
+                ) {
+                    return;
+                }
+
+                let shouldExpand =
+                    (typeof expand === "boolean")
+                        ? expand
+                        : isExpanded;
 
                 if (activeEdge !== edge) {
-                    if (isSidebarVisible || isExpanded || edgeTransitionTimer.running) {
+
+                    if (
+                        isSidebarVisible ||
+                        isExpanded ||
+                        edgeTransitionTimer.running
+                    ) {
                         pendingEdge = edge;
                         pendingPos = pos;
                         pendingMode = "sidebar";
 
-                        if (!edgeTransitionTimer.running) {
-                            pendingWasExpanded = shouldExpand;
+                        if (
+                            !edgeTransitionTimer.running
+                        ) {
+                            pendingWasExpanded =
+                                shouldExpand;
+
                             isExpanded = false;
                             isSidebarVisible = false;
                             isPeekVisible = false;
+
                             edgeTransitionTimer.restart();
                         }
+
                     } else {
+
                         disableAnim = true;
                         activeEdge = edge;
                         currentPos = pos;
@@ -747,35 +2146,61 @@ Variants {
                         pendingWasExpanded = shouldExpand;
                         teleportTimer.restart();
                     }
+
                     return;
+
                 } else {
-                    if (edgeTransitionTimer.running) {
+
+                    if (
+                        edgeTransitionTimer.running
+                    ) {
                         edgeTransitionTimer.stop();
-                        if (pendingMode === "sidebar") {
-                            isExpanded = pendingWasExpanded;
+
+                        if (
+                            pendingMode ===
+                            "sidebar"
+                        ) {
+                            isExpanded =
+                                pendingWasExpanded;
                         }
+
                         pendingMode = "";
                     }
                 }
 
                 currentPos = pos;
                 isSidebarVisible = true;
-                if (typeof expand === "boolean") {
+
+                if (
+                    typeof expand ===
+                    "boolean"
+                ) {
                     isExpanded = expand;
                 }
+
                 isPeekVisible = false;
                 hideTimer.restart();
             }
 
             Timer {
                 id: peekHideTimer
+
                 interval: 50
+
                 onTriggered: {
-                    if (typeof peekMouse !== "undefined" && peekMouse.pressed) {
+                    if (
+                        typeof peekMouse !==
+                        "undefined" &&
+                        peekMouse.pressed
+                    ) {
                         peekHideTimer.restart();
                         return;
                     }
-                    if (!peekMouse.containsMouse && !floatingWidget.isAnyEdgeHovered) {
+
+                    if (
+                        !peekMouse.containsMouse &&
+                        !floatingWidget.isAnyEdgeHovered
+                    ) {
                         floatingWidget.isPeekVisible = false;
                     }
                 }
@@ -783,13 +2208,30 @@ Variants {
 
             Timer {
                 id: hideTimer
-                interval: floatingWidget.useGraceTimer ? 3000 : 800
-                onTriggered: {
-                    if (floatingWidget.isPinned) return;
 
-                    if ((typeof sidebarDragArea !== "undefined" && sidebarDragArea.pressed) ||
-                        (typeof peekMouse !== "undefined" && peekMouse.pressed) ||
-                        (typeof gridMouseArea !== "undefined" && gridMouseArea.pressed)) {
+                interval:
+                    floatingWidget.useGraceTimer
+                        ? 3000
+                        : 800
+
+                onTriggered: {
+                    if (floatingWidget.isPinned)
+                        return;
+
+                    if (
+                        (
+                            typeof sidebarDragArea !== "undefined" &&
+                            sidebarDragArea.pressed
+                        ) ||
+                        (
+                            typeof peekMouse !== "undefined" &&
+                            peekMouse.pressed
+                        ) ||
+                        (
+                            typeof gridMouseArea !== "undefined" &&
+                            gridMouseArea.pressed
+                        )
+                    ) {
                         hideTimer.restart();
                         return;
                     }
@@ -802,231 +2244,659 @@ Variants {
 
             Timer {
                 id: peekShowTimer
+
                 interval: 300
+
                 property string pendingShowEdge: ""
                 property real pendingShowPos: 0
+
                 onTriggered: {
-                    if (floatingWidget.isSidebarVisible || floatingWidget.pendingMode === "sidebar") {
-                        floatingWidget.showSidebar(pendingShowEdge, pendingShowPos);
+                    if (
+                        floatingWidget.isSidebarVisible ||
+                        floatingWidget.pendingMode === "sidebar"
+                    ) {
+                        floatingWidget.showSidebar(
+                            pendingShowEdge,
+                            pendingShowPos
+                        );
+
                     } else {
-                        floatingWidget.showPeek(pendingShowEdge, pendingShowPos);
+
+                        floatingWidget.showPeek(
+                            pendingShowEdge,
+                            pendingShowPos
+                        );
                     }
                 }
             }
 
             Item {
                 id: mainHitArea
+
                 anchors.fill: parent
 
                 MouseArea {
                     id: topEdgeA
+
                     x: floatingWidget.topEdgeA_x
                     y: topBound
-                    width: floatingWidget.topEdgeA_w
-                    height: floatingWidget.edgeHitSize
+
+                    width:
+                        floatingWidget.topEdgeA_w
+
+                    height:
+                        floatingWidget.edgeHitSize
+
                     hoverEnabled: true
                     enabled: width > 0
-                    onEntered: floatingWidget.handleEdgeEntered("top", mouseX + x)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("top", mouse.x + x)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "top",
+                            mouseX + x
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "top",
+                                mouse.x + x
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: topEdgeB
+
                     x: floatingWidget.topEdgeB_x
                     y: topBound
-                    width: floatingWidget.topEdgeB_w
-                    height: floatingWidget.edgeHitSize
+
+                    width:
+                        floatingWidget.topEdgeB_w
+
+                    height:
+                        floatingWidget.edgeHitSize
+
                     hoverEnabled: true
                     enabled: width > 0
-                    onEntered: floatingWidget.handleEdgeEntered("top", mouseX + x)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("top", mouse.x + x)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "top",
+                            mouseX + x
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "top",
+                                mouse.x + x
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: bottomEdgeA
+
                     x: floatingWidget.bottomEdgeA_x
-                    y: bottomBound - floatingWidget.edgeHitSize
-                    width: floatingWidget.bottomEdgeA_w
-                    height: floatingWidget.edgeHitSize
+
+                    y:
+                        bottomBound -
+                        floatingWidget.edgeHitSize
+
+                    width:
+                        floatingWidget.bottomEdgeA_w
+
+                    height:
+                        floatingWidget.edgeHitSize
+
                     hoverEnabled: true
                     enabled: width > 0
-                    onEntered: floatingWidget.handleEdgeEntered("bottom", mouseX + x)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("bottom", mouse.x + x)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "bottom",
+                            mouseX + x
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "bottom",
+                                mouse.x + x
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: bottomEdgeB
+
                     x: floatingWidget.bottomEdgeB_x
-                    y: bottomBound - floatingWidget.edgeHitSize
-                    width: floatingWidget.bottomEdgeB_w
-                    height: floatingWidget.edgeHitSize
+
+                    y:
+                        bottomBound -
+                        floatingWidget.edgeHitSize
+
+                    width:
+                        floatingWidget.bottomEdgeB_w
+
+                    height:
+                        floatingWidget.edgeHitSize
+
                     hoverEnabled: true
                     enabled: width > 0
-                    onEntered: floatingWidget.handleEdgeEntered("bottom", mouseX + x)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("bottom", mouse.x + x)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "bottom",
+                            mouseX + x
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "bottom",
+                                mouse.x + x
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: leftEdgeA
+
                     x: leftBound
                     y: floatingWidget.leftEdgeA_y
-                    width: floatingWidget.edgeHitSize
-                    height: floatingWidget.leftEdgeA_h
+
+                    width:
+                        floatingWidget.edgeHitSize
+
+                    height:
+                        floatingWidget.leftEdgeA_h
+
                     hoverEnabled: true
                     enabled: height > 0
-                    onEntered: floatingWidget.handleEdgeEntered("left", mouseY + y)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("left", mouse.y + y)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "left",
+                            mouseY + y
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "left",
+                                mouse.y + y
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: leftEdgeB
+
                     x: leftBound
                     y: floatingWidget.leftEdgeB_y
-                    width: floatingWidget.edgeHitSize
-                    height: floatingWidget.leftEdgeB_h
+
+                    width:
+                        floatingWidget.edgeHitSize
+
+                    height:
+                        floatingWidget.leftEdgeB_h
+
                     hoverEnabled: true
                     enabled: height > 0
-                    onEntered: floatingWidget.handleEdgeEntered("left", mouseY + y)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("left", mouse.y + y)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "left",
+                            mouseY + y
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "left",
+                                mouse.y + y
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: rightEdgeA
-                    x: rightBound - floatingWidget.edgeHitSize
-                    y: floatingWidget.rightEdgeA_y
-                    width: floatingWidget.edgeHitSize
-                    height: floatingWidget.rightEdgeA_h
+
+                    x:
+                        rightBound -
+                        floatingWidget.edgeHitSize
+
+                    y:
+                        floatingWidget.rightEdgeA_y
+
+                    width:
+                        floatingWidget.edgeHitSize
+
+                    height:
+                        floatingWidget.rightEdgeA_h
+
                     hoverEnabled: true
                     enabled: height > 0
-                    onEntered: floatingWidget.handleEdgeEntered("right", mouseY + y)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("right", mouse.y + y)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "right",
+                            mouseY + y
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "right",
+                                mouse.y + y
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
 
                 MouseArea {
                     id: rightEdgeB
-                    x: rightBound - floatingWidget.edgeHitSize
-                    y: floatingWidget.rightEdgeB_y
-                    width: floatingWidget.edgeHitSize
-                    height: floatingWidget.rightEdgeB_h
+
+                    x:
+                        rightBound -
+                        floatingWidget.edgeHitSize
+
+                    y:
+                        floatingWidget.rightEdgeB_y
+
+                    width:
+                        floatingWidget.edgeHitSize
+
+                    height:
+                        floatingWidget.rightEdgeB_h
+
                     hoverEnabled: true
                     enabled: height > 0
-                    onEntered: floatingWidget.handleEdgeEntered("right", mouseY + y)
-                    onPositionChanged: mouse => floatingWidget.handleEdgePositionChanged("right", mouse.y + y)
-                    onExited: floatingWidget.handleEdgeExited()
+
+                    onEntered:
+                        floatingWidget.handleEdgeEntered(
+                            "right",
+                            mouseY + y
+                        )
+
+                    onPositionChanged:
+                        mouse =>
+                            floatingWidget.handleEdgePositionChanged(
+                                "right",
+                                mouse.y + y
+                            )
+
+                    onExited:
+                        floatingWidget.handleEdgeExited()
                 }
             }
 
-            property real peekBarLength: Math.max(floatingWidget.s(20), (floatingWidget.baseSidebarH - floatingWidget.s(20)) * 0.75)
+            property real peekBarLength:
+                Math.max(
+                    floatingWidget.s(20),
+                    (
+                        floatingWidget.baseSidebarH -
+                        floatingWidget.s(20)
+                    ) * 0.75
+                )
 
             Rectangle {
                 id: peekBar
-                width: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? peekBarLength : floatingWidget.s(11)
-                height: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? floatingWidget.s(11) : peekBarLength
-                radius: Math.min(floatingWidget.containerRadius, Math.min(width, height) / 2)
 
-                color: Qt.rgba(ThemeBackend.base.r, ThemeBackend.base.g, ThemeBackend.base.b, 1.0)
+                width:
+                    (
+                        floatingWidget.activeEdge === "bottom" ||
+                        floatingWidget.activeEdge === "top"
+                    )
+                        ? peekBarLength
+                        : floatingWidget.s(11)
+
+                height:
+                    (
+                        floatingWidget.activeEdge === "bottom" ||
+                        floatingWidget.activeEdge === "top"
+                    )
+                        ? floatingWidget.s(11)
+                        : peekBarLength
+
+                radius:
+                    Math.min(
+                        floatingWidget.containerRadius,
+                        Math.min(
+                            width,
+                            height
+                        ) / 2
+                    )
+
+                color:
+                    Qt.rgba(
+                        ThemeBackend.base.r,
+                        ThemeBackend.base.g,
+                        ThemeBackend.base.b,
+                        1.0
+                    )
+
                 border.width: 0
-
                 opacity: 1.0
-                scale: floatingWidget.isPeekVisible ? 1.0 : 0.6
 
-                Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+                scale:
+                    floatingWidget.isPeekVisible
+                        ? 1.0
+                        : 0.6
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 300
+                        easing.type: Easing.OutBack
+                    }
+                }
 
                 property real visualDragOffset: {
-                    if (!peekMouse.pressed) return 0;
-                    return Math.max(-floatingWidget.s(15), Math.min(peekMouse.currentDragDelta, floatingWidget.s(15)));
+                    if (!peekMouse.pressed)
+                        return 0;
+
+                    return Math.max(
+                        -floatingWidget.s(15),
+                        Math.min(
+                            peekMouse.currentDragDelta,
+                            floatingWidget.s(15)
+                        )
+                    );
                 }
 
                 x: {
-                    let offscreen = 0, visibleX = 0;
-                    if (floatingWidget.activeEdge === "left") {
-                        offscreen = leftBound - width - floatingWidget.s(10);
-                        visibleX = leftBound + floatingWidget.s(4);
-                        return (floatingWidget.isPeekVisible ? visibleX : offscreen) + visualDragOffset;
+                    let offscreen = 0;
+                    let visibleX = 0;
+
+                    if (
+                        floatingWidget.activeEdge === "left"
+                    ) {
+                        offscreen =
+                            leftBound -
+                            width -
+                            floatingWidget.s(10);
+
+                        visibleX =
+                            leftBound +
+                            floatingWidget.s(4);
+
+                        return (
+                            floatingWidget.isPeekVisible
+                                ? visibleX
+                                : offscreen
+                        ) +
+                        visualDragOffset;
                     }
-                    if (floatingWidget.activeEdge === "right") {
-                        offscreen = rightBound + floatingWidget.s(10);
-                        visibleX = rightBound - width - floatingWidget.s(4);
-                        return (floatingWidget.isPeekVisible ? visibleX : offscreen) - visualDragOffset;
+
+                    if (
+                        floatingWidget.activeEdge === "right"
+                    ) {
+                        offscreen =
+                            rightBound +
+                            floatingWidget.s(10);
+
+                        visibleX =
+                            rightBound -
+                            width -
+                            floatingWidget.s(4);
+
+                        return (
+                            floatingWidget.isPeekVisible
+                                ? visibleX
+                                : offscreen
+                        ) -
+                        visualDragOffset;
                     }
-                    if (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") return clampedCenterX - width / 2;
+
+                    if (
+                        floatingWidget.activeEdge === "bottom" ||
+                        floatingWidget.activeEdge === "top"
+                    ) {
+                        return (
+                            clampedCenterX -
+                            width / 2
+                        );
+                    }
+
                     return 0;
                 }
 
                 y: {
-                    let offscreen = 0, visibleY = 0;
-                    if (floatingWidget.activeEdge === "bottom") {
-                        offscreen = bottomBound + floatingWidget.s(10);
-                        visibleY = bottomBound - height - floatingWidget.s(4);
-                        return (floatingWidget.isPeekVisible ? visibleY : offscreen) - visualDragOffset;
+                    let offscreen = 0;
+                    let visibleY = 0;
+
+                    if (
+                        floatingWidget.activeEdge === "bottom"
+                    ) {
+                        offscreen =
+                            bottomBound +
+                            floatingWidget.s(10);
+
+                        visibleY =
+                            bottomBound -
+                            height -
+                            floatingWidget.s(4);
+
+                        return (
+                            floatingWidget.isPeekVisible
+                                ? visibleY
+                                : offscreen
+                        ) -
+                        visualDragOffset;
                     }
-                    if (floatingWidget.activeEdge === "top") {
-                        offscreen = topBound - height - floatingWidget.s(10);
-                        visibleY = topBound + floatingWidget.s(4);
-                        return (floatingWidget.isPeekVisible ? visibleY : offscreen) + visualDragOffset;
+
+                    if (
+                        floatingWidget.activeEdge === "top"
+                    ) {
+                        offscreen =
+                            topBound -
+                            height -
+                            floatingWidget.s(10);
+
+                        visibleY =
+                            topBound +
+                            floatingWidget.s(4);
+
+                        return (
+                            floatingWidget.isPeekVisible
+                                ? visibleY
+                                : offscreen
+                        ) +
+                        visualDragOffset;
                     }
-                    if (floatingWidget.activeEdge === "left" || floatingWidget.activeEdge === "right") return clampedCenterY - height / 2;
+
+                    if (
+                        floatingWidget.activeEdge === "left" ||
+                        floatingWidget.activeEdge === "right"
+                    ) {
+                        return (
+                            clampedCenterY -
+                            height / 2
+                        );
+                    }
+
                     return 0;
                 }
 
-                Behavior on x { enabled: !floatingWidget.disableAnim && !peekMouse.pressed && floatingWidget.isPeekVisible; NumberAnimation { duration: 350; easing.type: Easing.OutExpo } }
-                Behavior on y { enabled: !floatingWidget.disableAnim && !peekMouse.pressed && floatingWidget.isPeekVisible; NumberAnimation { duration: 350; easing.type: Easing.OutExpo } }
+                Behavior on x {
+                    enabled:
+                        !floatingWidget.disableAnim &&
+                        !peekMouse.pressed &&
+                        floatingWidget.isPeekVisible
+
+                    NumberAnimation {
+                        duration: 350
+                        easing.type: Easing.OutExpo
+                    }
+                }
+
+                Behavior on y {
+                    enabled:
+                        !floatingWidget.disableAnim &&
+                        !peekMouse.pressed &&
+                        floatingWidget.isPeekVisible
+
+                    NumberAnimation {
+                        duration: 350
+                        easing.type: Easing.OutExpo
+                    }
+                }
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? floatingWidget.s(20) : floatingWidget.s(3.5)
-                    height: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? floatingWidget.s(3.5) : floatingWidget.s(20)
-                    radius: Math.min(ThemeBackend.borderRadius, Math.min(width, height) / 2)
-                    color: Qt.darker(ThemeBackend.mauve, 1.8)
+
+                    width:
+                        (
+                            floatingWidget.activeEdge === "bottom" ||
+                            floatingWidget.activeEdge === "top"
+                        )
+                            ? floatingWidget.s(20)
+                            : floatingWidget.s(3.5)
+
+                    height:
+                        (
+                            floatingWidget.activeEdge === "bottom" ||
+                            floatingWidget.activeEdge === "top"
+                        )
+                            ? floatingWidget.s(3.5)
+                            : floatingWidget.s(20)
+
+                    radius:
+                        Math.min(
+                            ThemeBackend.borderRadius,
+                            Math.min(
+                                width,
+                                height
+                            ) / 2
+                        )
+
+                    color:
+                        Qt.darker(
+                            ThemeBackend.mauve,
+                            1.8
+                        )
                 }
 
                 MouseArea {
                     id: peekMouse
+
                     anchors.fill: parent
-                    anchors.margins: -floatingWidget.s(15)
+                    anchors.margins:
+                        -floatingWidget.s(15)
+
                     hoverEnabled: true
-                    enabled: floatingWidget.isPeekVisible || pressed
+
+                    enabled:
+                        floatingWidget.isPeekVisible ||
+                        pressed
 
                     property real startGlobalX: 0
                     property real startGlobalY: 0
                     property real currentDragDelta: 0
 
-                    onEntered: { floatingWidget.isPeekVisible = true; peekHideTimer.stop(); }
-                    onExited: { if (!pressed) peekHideTimer.restart(); }
+                    onEntered: {
+                        floatingWidget.isPeekVisible = true;
+                        peekHideTimer.stop();
+                    }
+
+                    onExited: {
+                        if (!pressed)
+                            peekHideTimer.restart();
+                    }
 
                     onPressed: mouse => {
-                        let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                        let gp =
+                            mapToItem(
+                                mainHitArea,
+                                mouse.x,
+                                mouse.y
+                            );
+
                         startGlobalX = gp.x;
                         startGlobalY = gp.y;
                         currentDragDelta = 0;
+
                         floatingWidget.useGraceTimer = true;
                     }
 
                     onPositionChanged: mouse => {
-                        if (!pressed) return;
+                        if (!pressed)
+                            return;
 
-                        let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                        let gp =
+                            mapToItem(
+                                mainHitArea,
+                                mouse.x,
+                                mouse.y
+                            );
+
                         let delta = 0;
 
-                        if (floatingWidget.activeEdge === "left") delta = gp.x - startGlobalX;
-                        else if (floatingWidget.activeEdge === "right") delta = startGlobalX - gp.x;
-                        else if (floatingWidget.activeEdge === "bottom") delta = startGlobalY - gp.y;
-                        else if (floatingWidget.activeEdge === "top") delta = gp.y - startGlobalY;
+                        if (
+                            floatingWidget.activeEdge === "left"
+                        ) {
+                            delta =
+                                gp.x -
+                                startGlobalX;
+
+                        } else if (
+                            floatingWidget.activeEdge === "right"
+                        ) {
+                            delta =
+                                startGlobalX -
+                                gp.x;
+
+                        } else if (
+                            floatingWidget.activeEdge === "bottom"
+                        ) {
+                            delta =
+                                startGlobalY -
+                                gp.y;
+
+                        } else if (
+                            floatingWidget.activeEdge === "top"
+                        ) {
+                            delta =
+                                gp.y -
+                                startGlobalY;
+                        }
 
                         currentDragDelta = delta;
 
-                        if (delta > floatingWidget.s(15) && !floatingWidget.isExpanded) {
-                            floatingWidget.showSidebar(floatingWidget.activeEdge, floatingWidget.currentPos);
+                        if (
+                            delta >
+                            floatingWidget.s(15) &&
+                            !floatingWidget.isExpanded
+                        ) {
+                            floatingWidget.showSidebar(
+                                floatingWidget.activeEdge,
+                                floatingWidget.currentPos
+                            );
+
                             floatingWidget.isExpanded = true;
-                        } else if (delta < -floatingWidget.s(10) && floatingWidget.isPeekVisible) {
-                            floatingWidget.isPeekVisible = false;
+
+                        } else if (
+                            delta <
+                            -floatingWidget.s(10) &&
+                            floatingWidget.isPeekVisible
+                        ) {
+                            floatingWidget.isPeekVisible =
+                                false;
                         }
                     }
 
@@ -1035,188 +2905,551 @@ Variants {
                         peekHideTimer.restart();
                     }
 
-                    onClicked: floatingWidget.showSidebar(floatingWidget.activeEdge, floatingWidget.currentPos)
+                    onClicked:
+                        floatingWidget.showSidebar(
+                            floatingWidget.activeEdge,
+                            floatingWidget.currentPos
+                        )
                 }
             }
 
             Item {
                 id: sidebarContainer
 
-                width: floatingWidget.sidebarW
-                height: floatingWidget.baseSidebarH
+                width:
+                    floatingWidget.sidebarW
 
-                visible: floatingWidget.isSidebarVisible || floatingWidget.visibleProgress > 0.001
+                height:
+                    floatingWidget.baseSidebarH
 
-                transformOrigin: Item.Center
-                rotation: floatingWidget.targetRotation
-                Behavior on rotation { enabled: !floatingWidget.disableAnim && floatingWidget.isSidebarVisible; NumberAnimation { duration: 250; easing.type: Easing.OutExpo } }
+                visible:
+                    floatingWidget.isSidebarVisible ||
+                    floatingWidget.visibleProgress > 0.001
 
-                x: floatingWidget.sidebarTargetX
-                y: floatingWidget.sidebarTargetY
+                transformOrigin:
+                    Item.Center
+
+                rotation:
+                    floatingWidget.targetRotation
+
+                Behavior on rotation {
+                    enabled:
+                        !floatingWidget.disableAnim &&
+                        floatingWidget.isSidebarVisible
+
+                    NumberAnimation {
+                        duration: 250
+                        easing.type: Easing.OutExpo
+                    }
+                }
+
+                x:
+                    floatingWidget.sidebarTargetX
+
+                y:
+                    floatingWidget.sidebarTargetY
 
                 Behavior on x {
-                    enabled: !floatingWidget.disableAnim && floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top")
-                    NumberAnimation { duration: 350; easing.type: Easing.OutExpo }
+                    enabled:
+                        !floatingWidget.disableAnim &&
+                        floatingWidget.isSidebarVisible &&
+                        (
+                            floatingWidget.activeEdge === "bottom" ||
+                            floatingWidget.activeEdge === "top"
+                        )
+
+                    NumberAnimation {
+                        duration: 350
+                        easing.type: Easing.OutExpo
+                    }
                 }
 
                 Behavior on y {
-                    enabled: !floatingWidget.disableAnim && floatingWidget.isSidebarVisible && (floatingWidget.activeEdge === "left" || floatingWidget.activeEdge === "right")
-                    NumberAnimation { duration: 350; easing.type: Easing.OutExpo }
+                    enabled:
+                        !floatingWidget.disableAnim &&
+                        floatingWidget.isSidebarVisible &&
+                        (
+                            floatingWidget.activeEdge === "left" ||
+                            floatingWidget.activeEdge === "right"
+                        )
+
+                    NumberAnimation {
+                        duration: 350
+                        easing.type: Easing.OutExpo
+                    }
                 }
 
                 Item {
                     id: morphOrigin
+
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
 
-                    width: floatingWidget.sidebarW + floatingWidget.currentExtraWidth
-                    height: floatingWidget.baseSidebarH + floatingWidget.currentExtraLength
+                    width:
+                        floatingWidget.sidebarW +
+                        floatingWidget.currentExtraWidth
+
+                    height:
+                        floatingWidget.baseSidebarH +
+                        floatingWidget.currentExtraLength
 
                     HoverHandler {
                         id: mainHoverTracker
+
                         onHoveredChanged: {
                             if (hovered) {
-                                floatingWidget.useGraceTimer = false;
+
+                                floatingWidget.useGraceTimer =
+                                    false;
+
                                 hideTimer.stop();
+
                             } else {
+
                                 floatingWidget.kickTimer();
                             }
                         }
                     }
 
                     Shape {
-                        visible: floatingWidget.outerCornerRadius > 0.5
-                        x: -floatingWidget.edgeBleed
-                        y: -floatingWidget.outerCornerRadius
-                        width: floatingWidget.outerCornerRadius + floatingWidget.edgeBleed
-                        height: floatingWidget.outerCornerRadius
-                        preferredRendererType: Shape.CurveRenderer
+                        visible:
+                            floatingWidget.outerCornerRadius >
+                            0.5
+
+                        x:
+                            -floatingWidget.edgeBleed
+
+                        y:
+                            -floatingWidget.outerCornerRadius
+
+                        width:
+                            floatingWidget.outerCornerRadius +
+                            floatingWidget.edgeBleed
+
+                        height:
+                            floatingWidget.outerCornerRadius
+
+                        preferredRendererType:
+                            Shape.CurveRenderer
+
                         ShapePath {
-                            fillColor: Qt.rgba(ThemeBackend.base.r, ThemeBackend.base.g, ThemeBackend.base.b, 0.95)
+                            fillColor:
+                                Qt.rgba(
+                                    ThemeBackend.base.r,
+                                    ThemeBackend.base.g,
+                                    ThemeBackend.base.b,
+                                    0.95
+                                )
+
                             strokeColor: "transparent"
+
                             startX: 0
                             startY: 0
-                            PathLine { x: 0; y: floatingWidget.outerCornerRadius }
-                            PathLine { x: floatingWidget.edgeBleed + floatingWidget.outerCornerRadius; y: floatingWidget.outerCornerRadius }
-                            PathArc {
-                                x: floatingWidget.edgeBleed
-                                y: 0
-                                radiusX: floatingWidget.outerCornerRadius
-                                radiusY: floatingWidget.outerCornerRadius
-                                direction: PathArc.Clockwise
+
+                            PathLine {
+                                x: 0
+                                y:
+                                    floatingWidget.outerCornerRadius
                             }
-                            PathLine { x: 0; y: 0 }
+
+                            PathLine {
+                                x:
+                                    floatingWidget.edgeBleed +
+                                    floatingWidget.outerCornerRadius
+
+                                y:
+                                    floatingWidget.outerCornerRadius
+                            }
+
+                            PathArc {
+                                x:
+                                    floatingWidget.edgeBleed
+
+                                y: 0
+
+                                radiusX:
+                                    floatingWidget.outerCornerRadius
+
+                                radiusY:
+                                    floatingWidget.outerCornerRadius
+
+                                direction:
+                                    PathArc.Clockwise
+                            }
+
+                            PathLine {
+                                x: 0
+                                y: 0
+                            }
                         }
                     }
 
                     Shape {
-                        visible: floatingWidget.outerCornerRadius > 0.5
-                        x: -floatingWidget.edgeBleed
-                        y: parent.height
-                        width: floatingWidget.outerCornerRadius + floatingWidget.edgeBleed
-                        height: floatingWidget.outerCornerRadius
-                        preferredRendererType: Shape.CurveRenderer
+                        visible:
+                            floatingWidget.outerCornerRadius >
+                            0.5
+
+                        x:
+                            -floatingWidget.edgeBleed
+
+                        y:
+                            parent.height
+
+                        width:
+                            floatingWidget.outerCornerRadius +
+                            floatingWidget.edgeBleed
+
+                        height:
+                            floatingWidget.outerCornerRadius
+
+                        preferredRendererType:
+                            Shape.CurveRenderer
+
                         ShapePath {
-                            fillColor: Qt.rgba(ThemeBackend.base.r, ThemeBackend.base.g, ThemeBackend.base.b, 0.95)
+                            fillColor:
+                                Qt.rgba(
+                                    ThemeBackend.base.r,
+                                    ThemeBackend.base.g,
+                                    ThemeBackend.base.b,
+                                    0.95
+                                )
+
                             strokeColor: "transparent"
+
                             startX: 0
-                            startY: floatingWidget.outerCornerRadius
-                            PathLine { x: 0; y: 0 }
-                            PathLine { x: floatingWidget.edgeBleed + floatingWidget.outerCornerRadius; y: 0 }
-                            PathArc {
-                                x: floatingWidget.edgeBleed
-                                y: floatingWidget.outerCornerRadius
-                                radiusX: floatingWidget.outerCornerRadius
-                                radiusY: floatingWidget.outerCornerRadius
-                                direction: PathArc.Counterclockwise
+
+                            startY:
+                                floatingWidget.outerCornerRadius
+
+                            PathLine {
+                                x: 0
+                                y: 0
                             }
-                            PathLine { x: 0; y: floatingWidget.outerCornerRadius }
+
+                            PathLine {
+                                x:
+                                    floatingWidget.edgeBleed +
+                                    floatingWidget.outerCornerRadius
+
+                                y: 0
+                            }
+
+                            PathArc {
+                                x:
+                                    floatingWidget.edgeBleed
+
+                                y:
+                                    floatingWidget.outerCornerRadius
+
+                                radiusX:
+                                    floatingWidget.outerCornerRadius
+
+                                radiusY:
+                                    floatingWidget.outerCornerRadius
+
+                                direction:
+                                    PathArc.Counterclockwise
+                            }
+
+                            PathLine {
+                                x: 0
+                                y:
+                                    floatingWidget.outerCornerRadius
+                            }
                         }
                     }
 
                     Rectangle {
                         id: morphingBackground
-                        x: -floatingWidget.edgeBleed
+
+                        x:
+                            -floatingWidget.edgeBleed
+
                         y: 0
-                        width: parent.width + floatingWidget.edgeBleed
-                        height: parent.height
-                        radius: floatingWidget.containerRadius
+
+                        width:
+                            parent.width +
+                            floatingWidget.edgeBleed
+
+                        height:
+                            parent.height
+
+                        radius:
+                            floatingWidget.containerRadius
+
                         topLeftRadius: 0
                         bottomLeftRadius: 0
-                        topRightRadius: floatingWidget.containerRadius
-                        bottomRightRadius: floatingWidget.containerRadius
-                        color: Qt.rgba(ThemeBackend.base.r, ThemeBackend.base.g, ThemeBackend.base.b, 0.95)
+
+                        topRightRadius:
+                            floatingWidget.containerRadius
+
+                        bottomRightRadius:
+                            floatingWidget.containerRadius
+
+                        color:
+                            Qt.rgba(
+                                ThemeBackend.base.r,
+                                ThemeBackend.base.g,
+                                ThemeBackend.base.b,
+                                0.95
+                            )
+
                         border.width: 0
 
                         MouseArea {
                             id: sidebarDragArea
+
                             anchors.fill: parent
-                            anchors.margins: floatingWidget.isExpanded ? -floatingWidget.s(20) : -floatingWidget.s(4)
+
+                            anchors.margins:
+                                floatingWidget.isExpanded
+                                    ? -floatingWidget.s(20)
+                                    : -floatingWidget.s(4)
+
                             hoverEnabled: true
-                            enabled: floatingWidget.isSidebarVisible
+
+                            enabled:
+                                floatingWidget.isSidebarVisible
 
                             property real startGlobalX: 0
                             property real startGlobalY: 0
 
-                            onEntered: hideTimer.stop()
-                            onExited: { if (!pressed && !gridMouseArea.containsMouse) floatingWidget.kickTimer(); }
+                            onEntered:
+                                hideTimer.stop()
+
+                            onExited: {
+                                if (
+                                    !pressed &&
+                                    !gridMouseArea.containsMouse
+                                ) {
+                                    floatingWidget.kickTimer();
+                                }
+                            }
+
                             onPressed: mouse => {
-                                let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                                let gp =
+                                    mapToItem(
+                                        mainHitArea,
+                                        mouse.x,
+                                        mouse.y
+                                    );
+
                                 startGlobalX = gp.x;
                                 startGlobalY = gp.y;
-                                floatingWidget.useGraceTimer = true;
+
+                                floatingWidget.useGraceTimer =
+                                    true;
                             }
+
                             onPositionChanged: mouse => {
-                                if (!pressed) return;
-                                let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
-                                floatingWidget.evaluateDrag(startGlobalX, startGlobalY, gp.x, gp.y);
+                                if (!pressed)
+                                    return;
+
+                                let gp =
+                                    mapToItem(
+                                        mainHitArea,
+                                        mouse.x,
+                                        mouse.y
+                                    );
+
+                                floatingWidget.evaluateDrag(
+                                    startGlobalX,
+                                    startGlobalY,
+                                    gp.x,
+                                    gp.y
+                                );
                             }
-                            onReleased: { if (!containsMouse) floatingWidget.kickTimer(); }
+
+                            onReleased: {
+                                if (!containsMouse)
+                                    floatingWidget.kickTimer();
+                            }
                         }
                     }
 
                     Item {
                         id: expandedContainer
-                        x: floatingWidget.sidebarW
+
+                        x:
+                            floatingWidget.sidebarW
+
                         y: 0
-                        height: parent.height
-                        width: floatingWidget.currentExtraWidth
-                        opacity: floatingWidget.expandProgress
+
+                        height:
+                            parent.height
+
+                        width:
+                            floatingWidget.currentExtraWidth
+
+                        opacity:
+                            floatingWidget.expandProgress
+
                         clip: true
 
                         component EmptyBlock : Rectangle {
-                            radius: Math.min(floatingWidget.s(10), Math.min(width, height) / 2)
-                            color: Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.05)
+                            radius:
+                                Math.min(
+                                    floatingWidget.s(10),
+                                    Math.min(
+                                        width,
+                                        height
+                                    ) / 2
+                                )
+
+                            color:
+                                Qt.rgba(
+                                    ThemeBackend.text.r,
+                                    ThemeBackend.text.g,
+                                    ThemeBackend.text.b,
+                                    0.05
+                                )
+
                             border.width: 0
-                            border.color: Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.08)
+
+                            border.color:
+                                Qt.rgba(
+                                    ThemeBackend.text.r,
+                                    ThemeBackend.text.g,
+                                    ThemeBackend.text.b,
+                                    0.08
+                                )
+
                             clip: true
                         }
 
                         Item {
                             anchors.fill: parent
-                            anchors.topMargin: floatingWidget.s(4)
-                            anchors.bottomMargin: floatingWidget.s(4)
-                            anchors.leftMargin: floatingWidget.s(4)
-                            anchors.rightMargin: floatingWidget.s(4)
-                            visible: floatingWidget.expandProgress > 0.01
+
+                            anchors.topMargin:
+                                floatingWidget.s(4)
+
+                            anchors.bottomMargin:
+                                floatingWidget.s(4)
+
+                            anchors.leftMargin:
+                                floatingWidget.s(4)
+
+                            anchors.rightMargin:
+                                floatingWidget.s(4)
+
+                            visible:
+                                floatingWidget.expandProgress > 0.01
 
                             Item {
                                 anchors.centerIn: parent
-                                width: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? parent.height : parent.width
-                                height: (floatingWidget.activeEdge === "bottom" || floatingWidget.activeEdge === "top") ? parent.width : parent.height
-                                rotation: floatingWidget.activeEdge === "right" ? 180 : (floatingWidget.activeEdge === "bottom" ? 90 : (floatingWidget.activeEdge === "top" ? -90 : 0))
 
-                                property real sp: floatingWidget.s(6)
-                                property real cw: Math.max(0, width)
-                                property real ch: Math.max(0, height)
+                                width:
+                                    (
+                                        floatingWidget.activeEdge === "bottom" ||
+                                        floatingWidget.activeEdge === "top"
+                                    )
+                                        ? parent.height
+                                        : parent.width
+
+                                height:
+                                    (
+                                        floatingWidget.activeEdge === "bottom" ||
+                                        floatingWidget.activeEdge === "top"
+                                    )
+                                        ? parent.width
+                                        : parent.height
+
+                                rotation:
+                                    floatingWidget.activeEdge === "right"
+                                        ? 180
+                                        : (
+                                            floatingWidget.activeEdge === "bottom"
+                                                ? 90
+                                                : (
+                                                    floatingWidget.activeEdge === "top"
+                                                        ? -90
+                                                        : 0
+                                                )
+                                        )
+
+                                property real sp:
+                                    floatingWidget.s(6)
+
+                                property real cw:
+                                    Math.max(
+                                        0,
+                                        width
+                                    )
+
+                                property real ch:
+                                    Math.max(
+                                        0,
+                                        height
+                                    )
 
                                 Repeater {
-                                    model: floatingWidget.currentLayoutTemplate
+                                    model:
+                                        floatingWidget.currentLayoutTemplate
+
                                     delegate: EmptyBlock {
-                                        x: (modelData.x * parent.cw) + (modelData.x > 0 ? parent.sp / 2 : 0)
-                                        y: (modelData.y * parent.ch) + (modelData.y > 0 ? parent.sp / 2 : 0)
-                                        width: (modelData.w * parent.cw) - ((modelData.x > 0 ? parent.sp / 2 : 0) + ((modelData.x + modelData.w) < 0.99 ? parent.sp / 2 : 0))
-                                        height: (modelData.h * parent.ch) - ((modelData.y > 0 ? parent.sp / 2 : 0) + ((modelData.y + modelData.h) < 0.99 ? parent.sp / 2 : 0))
+                                        x:
+                                            (
+                                                modelData.x *
+                                                parent.cw
+                                            ) +
+                                            (
+                                                modelData.x > 0
+                                                    ? parent.sp / 2
+                                                    : 0
+                                            )
+
+                                        y:
+                                            (
+                                                modelData.y *
+                                                parent.ch
+                                            ) +
+                                            (
+                                                modelData.y > 0
+                                                    ? parent.sp / 2
+                                                    : 0
+                                            )
+
+                                        width:
+                                            (
+                                                modelData.w *
+                                                parent.cw
+                                            ) -
+                                            (
+                                                (
+                                                    modelData.x > 0
+                                                        ? parent.sp / 2
+                                                        : 0
+                                                ) +
+                                                (
+                                                    (
+                                                        modelData.x +
+                                                        modelData.w
+                                                    ) < 0.99
+                                                        ? parent.sp / 2
+                                                        : 0
+                                                )
+                                            )
+
+                                        height:
+                                            (
+                                                modelData.h *
+                                                parent.ch
+                                            ) -
+                                            (
+                                                (
+                                                    modelData.y > 0
+                                                        ? parent.sp / 2
+                                                        : 0
+                                                ) +
+                                                (
+                                                    (
+                                                        modelData.y +
+                                                        modelData.h
+                                                    ) < 0.99
+                                                        ? parent.sp / 2
+                                                        : 0
+                                                )
+                                            )
                                     }
                                 }
                             }
@@ -1224,74 +3457,247 @@ Variants {
 
                         Repeater {
                             id: moduleRepeater
-                            model: floatingWidget.tabModules
+
+                            model:
+                                floatingWidget.tabModules
 
                             delegate: Loader {
                                 id: contentLoader
+
                                 z: 10
+
                                 anchors.fill: parent
-                                anchors.topMargin: floatingWidget.s(4)
-                                anchors.bottomMargin: floatingWidget.s(4)
-                                anchors.leftMargin: floatingWidget.s(4)
-                                anchors.rightMargin: floatingWidget.s(4)
 
-                                visible: index === floatingWidget.activeIndex && floatingWidget.expandProgress > 0.01
-                                source: modelData
-                                asynchronous: false
+                                anchors.topMargin:
+                                    floatingWidget.s(4)
 
-                                property var scaleFunc: floatingWidget.s
-                                property var mochaColors: ThemeBackend
-                                property string activeEdge: floatingWidget.activeEdge
+                                anchors.bottomMargin:
+                                    floatingWidget.s(4)
 
-                                property bool isCurrentTarget: index === floatingWidget.activeIndex
-                                property real modWidth: (status === Loader.Ready && item && item.preferredWidth !== undefined) ? item.preferredWidth : floatingWidget.baseExpandedWidth
-                                property real modExt: (status === Loader.Ready && item && item.preferredExtraLength !== undefined) ? item.preferredExtraLength : floatingWidget.baseExpandedExtraLength
+                                anchors.leftMargin:
+                                    floatingWidget.s(4)
+
+                                anchors.rightMargin:
+                                    floatingWidget.s(4)
+
+                                property bool isMusicModule:
+                                    String(modelData).endsWith("/Music.qml")
+
+                                // Music remains instantiated for the whole
+                                // QuickAction panel lifetime.
+                                property bool shouldLoad:
+                                    isMusicModule
+                                        ? floatingWidget.isSidebarVisible
+                                        : (
+                                            index === floatingWidget.activeIndex &&
+                                            floatingWidget.isSidebarVisible &&
+                                            floatingWidget.isExpanded &&
+                                            floatingWidget.expandProgress > 0.01
+                                        )
+
+                                // Only the selected/expanded module is shown.
+                                // Music can remain loaded invisibly while another
+                                // tab is selected or the panel is collapsed.
+                                visible:
+                                    index === floatingWidget.activeIndex &&
+                                    floatingWidget.isExpanded &&
+                                    floatingWidget.expandProgress > 0.01
+
+                                active:
+                                    shouldLoad
+
+                                source:
+                                    modelData
+
+                                asynchronous: true
+
+                                property var scaleFunc:
+                                    floatingWidget.s
+
+                                property var mochaColors:
+                                    ThemeBackend
+
+                                property string activeEdge:
+                                    floatingWidget.activeEdge
+
+                                property bool isCurrentTarget:
+                                    index === floatingWidget.activeIndex && shouldLoad
+
+                                property real modWidth:
+                                    (
+                                        status === Loader.Ready &&
+                                        item &&
+                                        item.preferredWidth !== undefined
+                                    )
+                                        ? item.preferredWidth
+                                        : floatingWidget.baseExpandedWidth
+
+                                property real modExt:
+                                    (
+                                        status === Loader.Ready &&
+                                        item &&
+                                        item.preferredExtraLength !== undefined
+                                    )
+                                        ? item.preferredExtraLength
+                                        : floatingWidget.baseExpandedExtraLength
 
                                 property var modLayout: {
-                                    if (status === Loader.Ready && item && item.requestedLayoutTemplate !== undefined) {
-                                        let req = item.requestedLayoutTemplate;
-                                        if (typeof req === "number") {
-                                            if (req === 0) return [ {x:0, y:0, w:0.5, h:0.5}, {x:0.5, y:0, w:0.5, h:0.5}, {x:0, y:0.5, w:0.5, h:0.5}, {x:0.5, y:0.5, w:0.5, h:0.5} ];
-                                            else return [ {x:0, y:0, w:1, h:1} ];
+                                    if (
+                                        status === Loader.Ready &&
+                                        item &&
+                                        item.requestedLayoutTemplate !== undefined
+                                    ) {
+                                        let req =
+                                            item.requestedLayoutTemplate;
+
+                                        if (
+                                            typeof req ===
+                                            "number"
+                                        ) {
+                                            if (req === 0) {
+                                                return [
+                                                    {
+                                                        x: 0,
+                                                        y: 0,
+                                                        w: 0.5,
+                                                        h: 0.5
+                                                    },
+                                                    {
+                                                        x: 0.5,
+                                                        y: 0,
+                                                        w: 0.5,
+                                                        h: 0.5
+                                                    },
+                                                    {
+                                                        x: 0,
+                                                        y: 0.5,
+                                                        w: 0.5,
+                                                        h: 0.5
+                                                    },
+                                                    {
+                                                        x: 0.5,
+                                                        y: 0.5,
+                                                        w: 0.5,
+                                                        h: 0.5
+                                                    }
+                                                ];
+                                            } else {
+                                                return [
+                                                    {
+                                                        x: 0,
+                                                        y: 0,
+                                                        w: 1,
+                                                        h: 1
+                                                    }
+                                                ];
+                                            }
                                         }
+
                                         return req;
                                     }
-                                    return [ {x:0, y:0, w:1, h:1} ];
+
+                                    return [
+                                        {
+                                            x: 0,
+                                            y: 0,
+                                            w: 1,
+                                            h: 1
+                                        }
+                                    ];
                                 }
 
                                 function updateSizes() {
                                     if (isCurrentTarget) {
-                                        floatingWidget.targetExpandedExtraLength = modExt;
-                                        floatingWidget.expandedWidth = modWidth;
-                                        floatingWidget.expandedExtraLength = modExt;
-                                        floatingWidget.currentLayoutTemplate = modLayout;
+                                        floatingWidget.targetExpandedExtraLength =
+                                            modExt;
+
+                                        floatingWidget.expandedWidth =
+                                            modWidth;
+
+                                        floatingWidget.expandedExtraLength =
+                                            modExt;
+
+                                        floatingWidget.currentLayoutTemplate =
+                                            modLayout;
                                     }
                                 }
 
-                                onLoaded: updateSizes()
-                                onIsCurrentTargetChanged: updateSizes()
-                                onModWidthChanged: updateSizes()
-                                onModExtChanged: updateSizes()
-                                onModLayoutChanged: updateSizes()
-                                Component.onCompleted: updateSizes()
+                                onLoaded:
+                                    updateSizes()
+
+                                onIsCurrentTargetChanged:
+                                    updateSizes()
+
+                                onModWidthChanged:
+                                    updateSizes()
+
+                                onModExtChanged:
+                                    updateSizes()
+
+                                onModLayoutChanged:
+                                    updateSizes()
+
+                                Component.onCompleted:
+                                    updateSizes()
                             }
                         }
 
                         MouseArea {
                             id: gridMouseArea
+
                             anchors.fill: parent
-                            acceptedButtons: Qt.NoButton
+
+                            acceptedButtons:
+                                Qt.NoButton
+
                             hoverEnabled: true
 
-                            onEntered: hideTimer.stop()
-                            onExited: { if (!sidebarDragArea.containsMouse) floatingWidget.kickTimer(); }
+                            onEntered:
+                                hideTimer.stop()
+
+                            onExited: {
+                                if (
+                                    !sidebarDragArea.containsMouse
+                                ) {
+                                    floatingWidget.kickTimer();
+                                }
+                            }
+
                             onWheel: wheel => {
                                 let step = 0;
-                                if (wheel.angleDelta.y > 0) step = (floatingWidget.activeEdge === "right" || floatingWidget.activeEdge === "top") ? 1 : -1;
-                                else if (wheel.angleDelta.y < 0) step = (floatingWidget.activeEdge === "right" || floatingWidget.activeEdge === "top") ? -1 : 1;
+
+                                if (
+                                    wheel.angleDelta.y > 0
+                                ) {
+                                    step =
+                                        (
+                                            floatingWidget.activeEdge === "right" ||
+                                            floatingWidget.activeEdge === "top"
+                                        )
+                                            ? 1
+                                            : -1;
+
+                                } else if (
+                                    wheel.angleDelta.y < 0
+                                ) {
+                                    step =
+                                        (
+                                            floatingWidget.activeEdge === "right" ||
+                                            floatingWidget.activeEdge === "top"
+                                        )
+                                            ? -1
+                                            : 1;
+                                }
 
                                 if (step !== 0) {
-                                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
+                                    floatingWidget.activeIndex =
+                                        Math.max(
+                                            0,
+                                            Math.min(
+                                                floatingWidget.tabCount - 1,
+                                                floatingWidget.activeIndex + step
+                                            )
+                                        );
                                 }
                             }
                         }
@@ -1299,118 +3705,294 @@ Variants {
 
                     Item {
                         id: staticContentWrapper
+
                         x: 0
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: floatingWidget.sidebarW
-                        height: floatingWidget.baseSidebarH
+
+                        anchors.verticalCenter:
+                            parent.verticalCenter
+
+                        width:
+                            floatingWidget.sidebarW
+
+                        height:
+                            floatingWidget.baseSidebarH
 
                         Item {
                             anchors.fill: parent
-                            anchors.leftMargin: floatingWidget.s(4) + 1
-                            anchors.rightMargin: floatingWidget.s(4) + 1
-                            anchors.topMargin: floatingWidget.s(6)
-                            anchors.bottomMargin: floatingWidget.s(6)
+
+                            anchors.leftMargin:
+                                floatingWidget.s(4) + 1
+
+                            anchors.rightMargin:
+                                floatingWidget.s(4) + 1
+
+                            anchors.topMargin:
+                                floatingWidget.s(6)
+
+                            anchors.bottomMargin:
+                                floatingWidget.s(6)
 
                             Item {
                                 id: controlArea
-                                width: parent.width
-                                height: floatingWidget.controlAreaHeight
+
+                                width:
+                                    parent.width
+
+                                height:
+                                    floatingWidget.controlAreaHeight
+
                                 x: 0
-                                y: floatingWidget.activeEdge === "left"
-                                    ? 0
-                                    : floatingWidget.getTargetY(floatingWidget.tabCount, floatingWidget.activeIndex)
+
+                                y:
+                                    floatingWidget.activeEdge === "left"
+                                        ? 0
+                                        : floatingWidget.getTargetY(
+                                            floatingWidget.tabCount,
+                                            floatingWidget.activeIndex
+                                        )
 
                                 Behavior on y {
-                                    enabled: !floatingWidget.disableAnim
-                                    NumberAnimation { duration: 350; easing.type: Easing.OutExpo }
+                                    enabled:
+                                        !floatingWidget.disableAnim
+
+                                    NumberAnimation {
+                                        duration: 350
+                                        easing.type: Easing.OutExpo
+                                    }
                                 }
 
                                 Item {
                                     id: expandButton
-                                    width: floatingWidget.buttonSize
-                                    height: floatingWidget.buttonSize
-                                    x: (parent.width - width) / 2
-                                    y: floatingWidget.activeEdge === "left"
-                                        ? floatingWidget.s(4)
-                                        : parent.height - height - floatingWidget.s(4)
 
-                                    rotation: floatingWidget.isExpanded ? 180 : 0
-                                    Behavior on rotation { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+                                    width:
+                                        floatingWidget.buttonSize
+
+                                    height:
+                                        floatingWidget.buttonSize
+
+                                    x:
+                                        (
+                                            parent.width -
+                                            width
+                                        ) / 2
+
+                                    y:
+                                        floatingWidget.activeEdge === "left"
+                                            ? floatingWidget.s(4)
+                                            : (
+                                                parent.height -
+                                                height -
+                                                floatingWidget.s(4)
+                                            )
+
+                                    rotation:
+                                        floatingWidget.isExpanded
+                                            ? 180
+                                            : 0
+
+                                    Behavior on rotation {
+                                        NumberAnimation {
+                                            duration: 300
+                                            easing.type: Easing.OutBack
+                                        }
+                                    }
 
                                     Item {
                                         anchors.fill: parent
 
-                                        property color iconColor: floatingWidget.isExpanded ? ThemeBackend.mauve :
-                                                                  (expandMouse.pressed ? Qt.darker(ThemeBackend.mauve, 1.2) :
-                                                                  (expandMouse.containsMouse ? ThemeBackend.mauve :
-                                                                  Qt.tint(ThemeBackend.base, Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.3))))
+                                        property color iconColor:
+                                            floatingWidget.isExpanded
+                                                ? ThemeBackend.mauve
+                                                : (
+                                                    expandMouse.pressed
+                                                        ? Qt.darker(
+                                                            ThemeBackend.mauve,
+                                                            1.2
+                                                        )
+                                                        : (
+                                                            expandMouse.containsMouse
+                                                                ? ThemeBackend.mauve
+                                                                : Qt.tint(
+                                                                    ThemeBackend.base,
+                                                                    Qt.rgba(
+                                                                        ThemeBackend.text.r,
+                                                                        ThemeBackend.text.g,
+                                                                        ThemeBackend.text.b,
+                                                                        0.3
+                                                                    )
+                                                                )
+                                                        )
+                                                )
 
-                                        property real pivotX: parent.width / 2 - floatingWidget.s(3)
+                                        property real pivotX:
+                                            parent.width / 2 -
+                                            floatingWidget.s(3)
 
                                         Rectangle {
-                                            width: floatingWidget.s(4)
-                                            height: floatingWidget.s(4)
-                                            radius: width / 2
-                                            color: parent.iconColor
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            x: parent.pivotX - (width / 2)
-                                            Behavior on color { ColorAnimation { duration: 200 } }
+                                            width:
+                                                floatingWidget.s(4)
+
+                                            height:
+                                                floatingWidget.s(4)
+
+                                            radius:
+                                                width / 2
+
+                                            color:
+                                                parent.iconColor
+
+                                            anchors.verticalCenter:
+                                                parent.verticalCenter
+
+                                            x:
+                                                parent.pivotX -
+                                                (
+                                                    width / 2
+                                                )
+
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 200
+                                                }
+                                            }
                                         }
 
                                         Rectangle {
-                                            x: parent.pivotX
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            width: floatingWidget.s(10)
-                                            height: floatingWidget.s(3.5)
-                                            radius: height / 2
-                                            transformOrigin: Item.Left
+                                            x:
+                                                parent.pivotX
+
+                                            anchors.verticalCenter:
+                                                parent.verticalCenter
+
+                                            width:
+                                                floatingWidget.s(10)
+
+                                            height:
+                                                floatingWidget.s(3.5)
+
+                                            radius:
+                                                height / 2
+
+                                            transformOrigin:
+                                                Item.Left
+
                                             rotation: 42
-                                            color: parent.iconColor
-                                            Behavior on color { ColorAnimation { duration: 200 } }
+
+                                            color:
+                                                parent.iconColor
+
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 200
+                                                }
+                                            }
                                         }
 
                                         Rectangle {
-                                            x: parent.pivotX
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            width: floatingWidget.s(10)
-                                            height: floatingWidget.s(3.5)
-                                            radius: height / 2
-                                            transformOrigin: Item.Left
+                                            x:
+                                                parent.pivotX
+
+                                            anchors.verticalCenter:
+                                                parent.verticalCenter
+
+                                            width:
+                                                floatingWidget.s(10)
+
+                                            height:
+                                                floatingWidget.s(3.5)
+
+                                            radius:
+                                                height / 2
+
+                                            transformOrigin:
+                                                Item.Left
+
                                             rotation: -42
-                                            color: parent.iconColor
-                                            Behavior on color { ColorAnimation { duration: 200 } }
+
+                                            color:
+                                                parent.iconColor
+
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 200
+                                                }
+                                            }
                                         }
                                     }
 
                                     MouseArea {
                                         id: expandMouse
+
                                         anchors.fill: parent
+
                                         hoverEnabled: true
 
                                         property real startGlobalX: 0
                                         property real startGlobalY: 0
                                         property bool isDragging: false
 
-                                        onEntered: hideTimer.stop()
-                                        onExited: floatingWidget.kickTimer()
+                                        onEntered:
+                                            hideTimer.stop()
+
+                                        onExited:
+                                            floatingWidget.kickTimer()
 
                                         onPressed: mouse => {
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
                                             startGlobalX = gp.x;
                                             startGlobalY = gp.y;
                                             isDragging = false;
                                         }
+
                                         onPositionChanged: mouse => {
-                                            if (!pressed) return;
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
-                                            let deltaX = Math.abs(gp.x - startGlobalX);
-                                            let deltaY = Math.abs(gp.y - startGlobalY);
-                                            if (deltaX > 5 || deltaY > 5) isDragging = true;
-                                            floatingWidget.evaluateDrag(startGlobalX, startGlobalY, gp.x, gp.y);
+                                            if (!pressed)
+                                                return;
+
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
+                                            let deltaX =
+                                                Math.abs(
+                                                    gp.x -
+                                                    startGlobalX
+                                                );
+
+                                            let deltaY =
+                                                Math.abs(
+                                                    gp.y -
+                                                    startGlobalY
+                                                );
+
+                                            if (
+                                                deltaX > 5 ||
+                                                deltaY > 5
+                                            ) {
+                                                isDragging = true;
+                                            }
+
+                                            floatingWidget.evaluateDrag(
+                                                startGlobalX,
+                                                startGlobalY,
+                                                gp.x,
+                                                gp.y
+                                            );
                                         }
+
                                         onClicked: {
                                             if (!isDragging) {
-                                                floatingWidget.isExpanded = !floatingWidget.isExpanded;
+                                                floatingWidget.isExpanded =
+                                                    !floatingWidget.isExpanded;
+
                                                 floatingWidget.kickTimer();
                                             }
                                         }
@@ -1419,58 +4001,155 @@ Variants {
 
                                 Rectangle {
                                     id: pinButton
-                                    width: floatingWidget.buttonSize
-                                    height: floatingWidget.buttonSize
-                                    radius: width / 2
-                                    x: (parent.width - width) / 2
-                                    y: floatingWidget.activeEdge === "left"
-                                        ? expandButton.y + expandButton.height + floatingWidget.s(6)
-                                        : expandButton.y - height - floatingWidget.s(6)
 
-                                    color: floatingWidget.isPinned
-                                        ? ThemeBackend.mauve
-                                        : (pinMouse.pressed
-                                            ? Qt.rgba(ThemeBackend.mauve.r, ThemeBackend.mauve.g, ThemeBackend.mauve.b, 0.4)
-                                            : (pinMouse.containsMouse
-                                                ? Qt.rgba(ThemeBackend.mauve.r, ThemeBackend.mauve.g, ThemeBackend.mauve.b, 0.25)
-                                                : "transparent"))
-                                    border.width: floatingWidget.s(2)
-                                    border.color: floatingWidget.isPinned
-                                        ? ThemeBackend.mauve
-                                        : Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.2)
+                                    width:
+                                        floatingWidget.buttonSize
 
-                                    Behavior on color { ColorAnimation { duration: 200 } }
-                                    Behavior on border.color { ColorAnimation { duration: 200 } }
+                                    height:
+                                        floatingWidget.buttonSize
+
+                                    radius:
+                                        width / 2
+
+                                    x:
+                                        (
+                                            parent.width -
+                                            width
+                                        ) / 2
+
+                                    y:
+                                        floatingWidget.activeEdge === "left"
+                                            ? (
+                                                expandButton.y +
+                                                expandButton.height +
+                                                floatingWidget.s(6)
+                                            )
+                                            : (
+                                                expandButton.y -
+                                                height -
+                                                floatingWidget.s(6)
+                                            )
+
+                                    color:
+                                        floatingWidget.isPinned
+                                            ? ThemeBackend.mauve
+                                            : (
+                                                pinMouse.pressed
+                                                    ? Qt.rgba(
+                                                        ThemeBackend.mauve.r,
+                                                        ThemeBackend.mauve.g,
+                                                        ThemeBackend.mauve.b,
+                                                        0.4
+                                                    )
+                                                    : (
+                                                        pinMouse.containsMouse
+                                                            ? Qt.rgba(
+                                                                ThemeBackend.mauve.r,
+                                                                ThemeBackend.mauve.g,
+                                                                ThemeBackend.mauve.b,
+                                                                0.25
+                                                            )
+                                                            : "transparent"
+                                                    )
+                                            )
+
+                                    border.width:
+                                        floatingWidget.s(2)
+
+                                    border.color:
+                                        floatingWidget.isPinned
+                                            ? ThemeBackend.mauve
+                                            : Qt.rgba(
+                                                ThemeBackend.text.r,
+                                                ThemeBackend.text.g,
+                                                ThemeBackend.text.b,
+                                                0.2
+                                            )
+
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 200
+                                        }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation {
+                                            duration: 200
+                                        }
+                                    }
 
                                     MouseArea {
                                         id: pinMouse
+
                                         anchors.fill: parent
+
                                         hoverEnabled: true
 
                                         property real startGlobalX: 0
                                         property real startGlobalY: 0
                                         property bool isDragging: false
 
-                                        onEntered: hideTimer.stop()
-                                        onExited: floatingWidget.kickTimer()
+                                        onEntered:
+                                            hideTimer.stop()
+
+                                        onExited:
+                                            floatingWidget.kickTimer()
 
                                         onPressed: mouse => {
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
                                             startGlobalX = gp.x;
                                             startGlobalY = gp.y;
                                             isDragging = false;
                                         }
+
                                         onPositionChanged: mouse => {
-                                            if (!pressed) return;
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
-                                            let deltaX = Math.abs(gp.x - startGlobalX);
-                                            let deltaY = Math.abs(gp.y - startGlobalY);
-                                            if (deltaX > 5 || deltaY > 5) isDragging = true;
-                                            floatingWidget.evaluateDrag(startGlobalX, startGlobalY, gp.x, gp.y);
+                                            if (!pressed)
+                                                return;
+
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
+                                            let deltaX =
+                                                Math.abs(
+                                                    gp.x -
+                                                    startGlobalX
+                                                );
+
+                                            let deltaY =
+                                                Math.abs(
+                                                    gp.y -
+                                                    startGlobalY
+                                                );
+
+                                            if (
+                                                deltaX > 5 ||
+                                                deltaY > 5
+                                            ) {
+                                                isDragging = true;
+                                            }
+
+                                            floatingWidget.evaluateDrag(
+                                                startGlobalX,
+                                                startGlobalY,
+                                                gp.x,
+                                                gp.y
+                                            );
                                         }
+
                                         onClicked: {
                                             if (!isDragging) {
-                                                floatingWidget.isPinned = !floatingWidget.isPinned;
+                                                floatingWidget.isPinned =
+                                                    !floatingWidget.isPinned;
                                             }
                                         }
                                     }
@@ -1479,89 +4158,297 @@ Variants {
 
                             Rectangle {
                                 id: activeHighlight
+
                                 x: 0
-                                width: parent.width
+
+                                width:
+                                    parent.width
+
                                 z: 0
-                                radius: Math.min(ThemeBackend.borderRadius, width / 2)
-                                color: ThemeBackend.mauve
+
+                                radius:
+                                    Math.min(
+                                        ThemeBackend.borderRadius,
+                                        width / 2
+                                    )
+
+                                color:
+                                    ThemeBackend.mauve
 
                                 property int prevIdx: 0
-                                property int curIdx: floatingWidget.activeIndex
+
+                                property int curIdx:
+                                    floatingWidget.activeIndex
 
                                 onCurIdxChanged: {
-                                    if (curIdx > prevIdx) { bottomAnim.duration = 200; topAnim.duration = 350; }
-                                    else if (curIdx < prevIdx) { topAnim.duration = 200; bottomAnim.duration = 350; }
+                                    if (curIdx > prevIdx) {
+                                        bottomAnim.duration = 200;
+                                        topAnim.duration = 350;
+
+                                    } else if (curIdx < prevIdx) {
+                                        topAnim.duration = 200;
+                                        bottomAnim.duration = 350;
+                                    }
+
                                     prevIdx = curIdx;
                                 }
 
-                                property real targetTop: floatingWidget.barOffsetY + floatingWidget.getTargetY(curIdx, curIdx)
-                                property real targetBottom: targetTop + floatingWidget.h_ac
+                                property real targetTop:
+                                    floatingWidget.barOffsetY +
+                                    floatingWidget.getTargetY(
+                                        curIdx,
+                                        curIdx
+                                    )
 
-                                property real actualTop: targetTop
-                                property real actualBottom: targetBottom
+                                property real targetBottom:
+                                    targetTop +
+                                    floatingWidget.h_ac
 
-                                Behavior on actualTop { enabled: !floatingWidget.disableAnim; NumberAnimation { id: topAnim; duration: 250; easing.type: Easing.OutExpo } }
-                                Behavior on actualBottom { enabled: !floatingWidget.disableAnim; NumberAnimation { id: bottomAnim; duration: 250; easing.type: Easing.OutExpo } }
+                                property real actualTop:
+                                    targetTop
 
-                                y: actualTop
-                                height: actualBottom - actualTop
+                                property real actualBottom:
+                                    targetBottom
+
+                                Behavior on actualTop {
+                                    enabled:
+                                        !floatingWidget.disableAnim
+
+                                    NumberAnimation {
+                                        id: topAnim
+
+                                        duration: 250
+                                        easing.type: Easing.OutExpo
+                                    }
+                                }
+
+                                Behavior on actualBottom {
+                                    enabled:
+                                        !floatingWidget.disableAnim
+
+                                    NumberAnimation {
+                                        id: bottomAnim
+
+                                        duration: 250
+                                        easing.type: Easing.OutExpo
+                                    }
+                                }
+
+                                y:
+                                    actualTop
+
+                                height:
+                                    actualBottom -
+                                    actualTop
                             }
 
                             Repeater {
-                                model: floatingWidget.tabCount
+                                model:
+                                    floatingWidget.tabCount
+
                                 delegate: Rectangle {
                                     id: barPill
-                                    property bool isActive: floatingWidget.activeIndex === index
-                                    property bool isHovered: barMouse.containsMouse
-                                    property bool isPressed: barMouse.pressed
+
+                                    property bool isActive:
+                                        floatingWidget.activeIndex === index
+
+                                    property bool isHovered:
+                                        barMouse.containsMouse
+
+                                    property bool isPressed:
+                                        barMouse.pressed
 
                                     x: 0
-                                    width: parent.width
-                                    radius: Math.min(ThemeBackend.borderRadius, width / 2)
+
+                                    width:
+                                        parent.width
+
+                                    radius:
+                                        Math.min(
+                                            ThemeBackend.borderRadius,
+                                            width / 2
+                                        )
+
                                     z: 1
 
-                                    y: floatingWidget.barOffsetY + floatingWidget.getTargetY(index, floatingWidget.activeIndex)
-                                    Behavior on y { enabled: !floatingWidget.disableAnim; NumberAnimation { duration: 350; easing.type: Easing.OutExpo } }
+                                    y:
+                                        floatingWidget.barOffsetY +
+                                        floatingWidget.getTargetY(
+                                            index,
+                                            floatingWidget.activeIndex
+                                        )
 
-                                    height: isActive ? floatingWidget.h_ac : floatingWidget.h_in
-                                    Behavior on height { enabled: !floatingWidget.disableAnim; NumberAnimation { duration: 350; easing.type: Easing.OutExpo } }
+                                    Behavior on y {
+                                        enabled:
+                                            !floatingWidget.disableAnim
 
-                                    color: isActive ? "transparent" : (isPressed ? Qt.rgba(ThemeBackend.mauve.r, ThemeBackend.mauve.g, ThemeBackend.mauve.b, 0.4) : (isHovered ? Qt.rgba(ThemeBackend.mauve.r, ThemeBackend.mauve.g, ThemeBackend.mauve.b, 0.25) : Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.15)))
-                                    Behavior on color { ColorAnimation { duration: 250 } }
+                                        NumberAnimation {
+                                            duration: 350
+                                            easing.type: Easing.OutExpo
+                                        }
+                                    }
 
-                                    scale: isActive ? 1.0 : (isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
-                                    Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack } }
+                                    height:
+                                        isActive
+                                            ? floatingWidget.h_ac
+                                            : floatingWidget.h_in
+
+                                    Behavior on height {
+                                        enabled:
+                                            !floatingWidget.disableAnim
+
+                                        NumberAnimation {
+                                            duration: 350
+                                            easing.type: Easing.OutExpo
+                                        }
+                                    }
+
+                                    color:
+                                        isActive
+                                            ? "transparent"
+                                            : (
+                                                isPressed
+                                                    ? Qt.rgba(
+                                                        ThemeBackend.mauve.r,
+                                                        ThemeBackend.mauve.g,
+                                                        ThemeBackend.mauve.b,
+                                                        0.4
+                                                    )
+                                                    : (
+                                                        isHovered
+                                                            ? Qt.rgba(
+                                                                ThemeBackend.mauve.r,
+                                                                ThemeBackend.mauve.g,
+                                                                ThemeBackend.mauve.b,
+                                                                0.25
+                                                            )
+                                                            : Qt.rgba(
+                                                                ThemeBackend.text.r,
+                                                                ThemeBackend.text.g,
+                                                                ThemeBackend.text.b,
+                                                                0.15
+                                                            )
+                                                    )
+                                            )
+
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 250
+                                        }
+                                    }
+
+                                    scale:
+                                        isActive
+                                            ? 1.0
+                                            : (
+                                                isPressed
+                                                    ? 0.95
+                                                    : (
+                                                        isHovered
+                                                            ? 1.05
+                                                            : 1.0
+                                                    )
+                                            )
+
+                                    Behavior on scale {
+                                        NumberAnimation {
+                                            duration: 250
+                                            easing.type: Easing.OutBack
+                                        }
+                                    }
 
                                     MouseArea {
                                         id: barMouse
+
                                         anchors.fill: parent
+
                                         hoverEnabled: true
 
                                         property real startGlobalX: 0
                                         property real startGlobalY: 0
                                         property bool isDragging: false
 
-                                        onEntered: { floatingWidget.hoveredBars++; hideTimer.stop(); }
-                                        onExited: { floatingWidget.hoveredBars = Math.max(0, floatingWidget.hoveredBars - 1); floatingWidget.kickTimer(); }
+                                        onEntered: {
+                                            floatingWidget.hoveredBars++;
+                                            hideTimer.stop();
+                                        }
+
+                                        onExited: {
+                                            floatingWidget.hoveredBars =
+                                                Math.max(
+                                                    0,
+                                                    floatingWidget.hoveredBars - 1
+                                                );
+
+                                            floatingWidget.kickTimer();
+                                        }
 
                                         onPressed: mouse => {
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
                                             startGlobalX = gp.x;
                                             startGlobalY = gp.y;
                                             isDragging = false;
                                         }
+
                                         onPositionChanged: mouse => {
-                                            if (!pressed) return;
-                                            let gp = mapToItem(mainHitArea, mouse.x, mouse.y);
-                                            let deltaX = Math.abs(gp.x - startGlobalX);
-                                            let deltaY = Math.abs(gp.y - startGlobalY);
-                                            if (deltaX > 5 || deltaY > 5) isDragging = true;
-                                            floatingWidget.evaluateDrag(startGlobalX, startGlobalY, gp.x, gp.y);
+                                            if (!pressed)
+                                                return;
+
+                                            let gp =
+                                                mapToItem(
+                                                    mainHitArea,
+                                                    mouse.x,
+                                                    mouse.y
+                                                );
+
+                                            let deltaX =
+                                                Math.abs(
+                                                    gp.x -
+                                                    startGlobalX
+                                                );
+
+                                            let deltaY =
+                                                Math.abs(
+                                                    gp.y -
+                                                    startGlobalY
+                                                );
+
+                                            if (
+                                                deltaX > 5 ||
+                                                deltaY > 5
+                                            ) {
+                                                isDragging = true;
+                                            }
+
+                                            floatingWidget.evaluateDrag(
+                                                startGlobalX,
+                                                startGlobalY,
+                                                gp.x,
+                                                gp.y
+                                            );
                                         }
+
                                         onClicked: {
                                             if (!isDragging) {
-                                                if (!barPill.isActive) floatingWidget.activeIndex = index;
-                                                else floatingWidget.isExpanded = !floatingWidget.isExpanded;
+
+                                                if (
+                                                    !barPill.isActive
+                                                ) {
+
+                                                    floatingWidget.activeIndex =
+                                                        index;
+
+                                                } else {
+
+                                                    floatingWidget.isExpanded =
+                                                        !floatingWidget.isExpanded;
+                                                }
                                             }
                                         }
                                     }

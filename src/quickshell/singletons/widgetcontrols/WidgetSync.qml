@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import "../../widgets"
 
-QtObject {
+Item {
     id: root
 
     signal geometryChanged(string monitor, string widgetId, real x, real y, real w, real h, real opacity, real rotation)

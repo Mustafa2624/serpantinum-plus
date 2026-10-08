@@ -96,7 +96,7 @@ Item {
                 anchors.fill: parent
                 source: root.source
                 fillMode: root.fillMode
-                playing: root.playing && root.visible
+                playing: root.playing
                 horizontalAlignment: Image.AlignHCenter
                 verticalAlignment: Image.AlignVCenter
             }

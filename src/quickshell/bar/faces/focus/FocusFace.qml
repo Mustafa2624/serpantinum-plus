@@ -36,6 +36,15 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: barWindow ? barWindow.s(root.isCompact ? 5 : 6) : (root.isCompact ? 5 : 6)
 
+        property bool initAnimTrigger: !barWindow || barWindow.startupCascadeFinished
+
+        opacity: initAnimTrigger ? 1.0 : 0.0
+        transform: Translate {
+            y: innerLayout.initAnimTrigger ? 0 : (barWindow ? barWindow.s(15) : 15)
+            Behavior on y { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+        }
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
         IconButton {
             id: focusIconButton
             width: barWindow ? barWindow.s(root.isCompact ? 28 : 30) : (root.isCompact ? 28 : 30)
@@ -61,7 +70,6 @@ Item {
             clip: true
 
             Behavior on width {
-                enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging) : true
                 NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
             }
 
@@ -79,19 +87,15 @@ Item {
 
                 property string targetText: root.displayText
                 onTargetTextChanged: {
-                    if (titleTextMain.text === "" || targetText === "") {
-                        titleTextMain.text = targetText;
-                        return;
-                    }
                     if (titleFadeAnim.running) titleFadeAnim.stop();
                     titleFadeAnim.start();
                 }
 
                 SequentialAnimation {
                     id: titleFadeAnim
-                    NumberAnimation { target: titleTextMain; property: "opacity"; to: 0.0; duration: 80; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: titleTextMain; property: "opacity"; to: 0.0; duration: 100; easing.type: Easing.OutQuad }
                     ScriptAction { script: titleTextMain.text = titleTextMain.targetText; }
-                    NumberAnimation { target: titleTextMain; property: "opacity"; to: 1.0; duration: 120; easing.type: Easing.InQuad }
+                    NumberAnimation { target: titleTextMain; property: "opacity"; to: 1.0; duration: 150; easing.type: Easing.InQuad }
                 }
             }
         }

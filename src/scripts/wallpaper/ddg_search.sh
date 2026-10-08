@@ -66,13 +66,7 @@ python3 -u "$SCRIPT_DIR/get_ddg_links.py" "$QUERY" | while IFS='|' read -r thumb
             rm -f "$tmppath"
         else
             if [[ "$actual_mime" == "image/webp" ]] || [ $is_webp -eq 1 ]; then
-                if command -v magick >/dev/null 2>&1; then
-                    magick "$tmppath" "$filepath" 2>/dev/null || mv "$tmppath" "$filepath"
-                elif command -v ffmpeg >/dev/null 2>&1; then
-                    ffmpeg -y -i "$tmppath" "$filepath" >/dev/null 2>&1 || mv "$tmppath" "$filepath"
-                else
-                    mv "$tmppath" "$filepath"
-                fi
+                magick "$tmppath" "$filepath" 2>/dev/null || mv "$tmppath" "$filepath"
                 rm -f "$tmppath"
             else
                 mv "$tmppath" "$filepath"

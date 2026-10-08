@@ -14,22 +14,8 @@ Item {
     property bool notifiedFull: false
     property bool notifiedLow: false
     property bool notifiedCritical: false
-    property real lastNotifTime: 0
-    property string lastNotifType: ""
 
-    onIsDesktopChanged: root.checkBattery()
-
-    function sendNotification(type, summary, body, icon, urgency) {
-        let now = Date.now();
-        if (root.lastNotifType === type && (now - root.lastNotifTime < 60000)) {
-            return;
-        }
-        if (now - root.lastNotifTime < 3000) {
-            return;
-        }
-        root.lastNotifType = type;
-        root.lastNotifTime = now;
-
+    function sendNotification(summary, body, icon, urgency) {
         let u = urgency ? urgency : "normal";
         let ic = icon ? icon : "battery";
         let appName = I18n.t("sysnotif.battery.app_name");
@@ -44,39 +30,35 @@ Item {
     }
 
     function checkBattery() {
-        if (root.isDesktop || !UPower.displayDevice.ready || (typeof I18n !== "undefined" && !I18n.isReady)) return;
+        if (root.isDesktop || !UPower.displayDevice.ready) return;
 
         let pct = root.batteryPercentage;
         let state = UPower.displayDevice.state;
         let charging = state === UPowerDeviceState.Charging || state === UPowerDeviceState.FullyCharged;
 
-        if (pct < 95) {
-            root.notifiedFull = false;
-        }
-
         if (charging) {
-            if (pct > 20) {
-                root.notifiedLow = false;
-                root.notifiedCritical = false;
-            }
+            root.notifiedLow = false;
+            root.notifiedCritical = false;
 
             if ((pct >= 100 || state === UPowerDeviceState.FullyCharged) && !root.notifiedFull) {
                 root.notifiedFull = true;
                 root.sendNotification(
-                    "full",
                     I18n.t("sysnotif.battery.full_title"),
                     I18n.t("sysnotif.battery.full_body"),
                     "battery-full-charged",
                     "normal"
                 );
+            } else if (pct < 98) {
+                root.notifiedFull = false;
             }
         } else {
+            root.notifiedFull = false;
+
             if (pct <= 5) {
                 if (!root.notifiedCritical) {
                     root.notifiedCritical = true;
                     root.notifiedLow = true;
                     root.sendNotification(
-                        "critical",
                         I18n.t("sysnotif.battery.critical_title"),
                         I18n.t("sysnotif.battery.critical_body", { "pct": pct.toString() }),
                         "battery-level-0-symbolic",
@@ -87,14 +69,13 @@ Item {
                 if (!root.notifiedLow) {
                     root.notifiedLow = true;
                     root.sendNotification(
-                        "low",
                         I18n.t("sysnotif.battery.low_title"),
                         I18n.t("sysnotif.battery.low_body", { "pct": pct.toString() }),
                         "battery-level-20-symbolic",
                         "critical"
                     );
                 }
-            } else if (pct > 25) {
+            } else {
                 root.notifiedLow = false;
                 root.notifiedCritical = false;
             }
@@ -102,14 +83,13 @@ Item {
     }
 
     Connections {
-        target: (typeof I18n !== "undefined") ? I18n : null
-        function onLanguageChanged() { root.checkBattery(); }
-    }
-
-    Connections {
         target: UPower.displayDevice
         function onPercentageChanged() { root.checkBattery(); }
         function onStateChanged() { root.checkBattery(); }
         function onReadyChanged() { root.checkBattery(); }
+    }
+
+    Component.onCompleted: {
+        root.checkBattery();
     }
 }

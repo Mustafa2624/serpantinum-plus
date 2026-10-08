@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
+import QtCore
 import Qt.labs.folderlistmodel
 import QtMultimedia
 import QtQuick.Effects
@@ -497,24 +498,14 @@ Item {
         }
     }
 
-    QtObject {
+    Settings {
         id: searchState
+        location: Caching.getCacheDir("wallpaper") + "/settings.conf"
+        category: "QS_WallpaperPicker"
         property string query: ""
         property bool searched: false
         property string lastName: ""
         property int sessionId: 0
-
-        readonly property string filePath: Caching.getCacheDir("wallpaper") + "/search_state.json"
-
-        function save() {
-            let data = JSON.stringify({
-                query: searchState.query,
-                searched: searchState.searched,
-                lastName: searchState.lastName,
-                sessionId: searchState.sessionId
-            });
-            Quickshell.execDetached(["sh", "-c", "printf '%s\\n' \"$1\" > \"$2\"", "_", data, filePath]);
-        }
     }
 
     onIsSearchPausedChanged: {
@@ -592,14 +583,12 @@ Item {
                 searchState.searched = window.hasSearched;
                 searchState.lastName = window.lastSearchName;
                 searchState.sessionId = window.searchSessionId;
-                searchState.save();
                 Quickshell.execDetached([
                     window.scriptDir + "/search_control.sh",
                     "pause",
                     Caching.getRunDir("wallpaper")
                 ]);
             } else {
-                searchState.save();
                 Quickshell.execDetached([
                     window.scriptDir + "/search_control.sh",
                     "stop",
@@ -687,7 +676,6 @@ Item {
         window.visibleItemCount = 0;
         searchState.searched = true;
         searchState.query = searchInput.text.trim();
-        searchState.save();
         window.isSearchPaused = false;
         window.searchQuery = searchInput.text.trim();
         window._lastFilter = window.currentFilter;
@@ -861,37 +849,6 @@ Item {
         interval: 150
         repeat: false
         onTriggered: window.triggerIndexer()
-    }
-
-    Process {
-        id: searchStateReader
-        running: false
-        command: ["sh", "-c", "[ -f \"$1\" ] && cat \"$1\"", "_", Caching.getCacheDir("wallpaper") + "/search_state.json"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let trimmed = this.text ? this.text.trim() : "";
-                if (trimmed.length > 0) {
-                    try {
-                        let data = JSON.parse(trimmed);
-                        if (data && typeof data === "object") {
-                            searchState.query = data.query || "";
-                            searchState.searched = !!data.searched;
-                            searchState.lastName = data.lastName || "";
-                            searchState.sessionId = data.sessionId || 0;
-
-                            if (searchState.searched) {
-                                searchInput.text = searchState.query;
-                                window.searchQuery = searchState.query;
-                                window.hasSearched = true;
-                                window.lastSearchName = searchState.lastName;
-                                window.searchSessionId = searchState.sessionId;
-                                window.isSearchPaused = true;
-                            }
-                        }
-                    } catch(e) {}
-                }
-            }
-        }
     }
 
     Process {
@@ -2103,7 +2060,6 @@ Item {
                     onTextEdited: function(newText) {
                         window.hasSearched = false;
                         searchState.searched = false;
-                        searchState.save();
                     }
 
                     onAccepted: function(finalText) {
@@ -2155,7 +2111,15 @@ Item {
     Component.onCompleted: {
         Quickshell.execDetached(["bash", "-c", "mkdir -p '" + decodeURIComponent(window.searchDir.replace("file://", "")) + "'"]);
 
-        searchStateReader.running = true;
+        if (searchState.searched) {
+            searchInput.text = searchState.query;
+            window.searchQuery = searchState.query;
+            window.hasSearched = true;
+            window.lastSearchName = searchState.lastName;
+            window.searchSessionId = searchState.sessionId;
+            window.isSearchPaused = true;
+        }
+
         indexDiskReader.running = true;
         window.syncFromSrcModel();
         window.triggerIndexer();

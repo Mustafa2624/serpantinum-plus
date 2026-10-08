@@ -113,7 +113,7 @@ Item {
         property color accentColor: root.basePrimary
         property bool showText: textVal !== ""
         property bool useSineWave: root.useSineWave
-        property bool initAnimTrigger: (!barWindow || !!(root.activeTarget && root.activeTarget.isPreview))
+        property bool initAnimTrigger: (!barWindow || (root.activeTarget && root.activeTarget.isPreview))
 
         property real animValue: initAnimTrigger ? value : 0
         Behavior on animValue { NumberAnimation { duration: 600; easing.type: Easing.OutQuint } }

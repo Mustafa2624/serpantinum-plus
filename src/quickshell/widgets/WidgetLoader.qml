@@ -449,9 +449,8 @@ Item {
             if (!loaderRoot.isTargetMonitor(monitor)) return;
             let target = String(widgetId).trim();
             for (let i = 0; i < widgetsModel.count; i++) {
-                let item = widgetsModel.get(i);
-                if (item && String(item.wId).trim() === target) {
-                    widgetsModel.remove(i, 1);
+                if (String(widgetsModel.get(i).wId).trim() === target) {
+                    widgetsModel.setProperty(i, "isRemoving", true);
                     loaderRoot.saveNow();
                     break;
                 }
@@ -461,10 +460,10 @@ Item {
         function onWidgetsByTypeRemoved(monitor, type) {
             if (!loaderRoot.isTargetMonitor(monitor)) return;
             let matched = false;
-            for (let i = widgetsModel.count - 1; i >= 0; i--) {
+            for (let i = 0; i < widgetsModel.count; i++) {
                 let item = widgetsModel.get(i);
-                if (item && item.wType === type) {
-                    widgetsModel.remove(i, 1);
+                if (item && item.wType === type && !item.isRemoving) {
+                    widgetsModel.setProperty(i, "isRemoving", true);
                     matched = true;
                 }
             }
@@ -475,7 +474,9 @@ Item {
 
         function onWidgetsCleared(monitor) {
             if (!loaderRoot.isTargetMonitor(monitor)) return;
-            widgetsModel.clear();
+            for (let i = 0; i < widgetsModel.count; i++) {
+                widgetsModel.setProperty(i, "isRemoving", true);
+            }
             loaderRoot.saveNow();
         }
 
@@ -665,7 +666,7 @@ Item {
             for (let i = 0; i < widgetsModel.count; i++) {
                 let item = widgetsModel.get(i);
                 if (item && String(item.wId).trim() === target) {
-                    widgetsModel.remove(i, 1);
+                    widgetsModel.setProperty(i, "isRemoving", true);
                     loaderRoot.saveNow();
                     return "ok";
                 }
@@ -691,7 +692,9 @@ Item {
         }
 
         function clear(): string {
-            widgetsModel.clear();
+            for (let i = 0; i < widgetsModel.count; i++) {
+                widgetsModel.setProperty(i, "isRemoving", true);
+            }
             loaderRoot.saveNow();
             return "ok";
         }

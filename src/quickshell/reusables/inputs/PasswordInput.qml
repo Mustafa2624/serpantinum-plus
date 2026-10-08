@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import Quickshell
+import QtCore
 import "../../"
 import "../"
 
@@ -34,21 +34,13 @@ FocusScope {
     property int maximumLength: -1
     property var validator: null
 
-    property bool isRevealed: (typeof Config !== "undefined") ? Config.getSetting("inputs.passwordReveal", false) : false
-    property bool _isUpdatingFromConfig: false
-
-    Connections {
-        target: (typeof Config !== "undefined") ? Config : null
-        function onSettingsLoaded() {
-            let saved = Config.getSetting("inputs.passwordReveal", false);
-            if (root.isRevealed !== saved) {
-                root._isUpdatingFromConfig = true;
-                root.isRevealed = saved;
-                root._isUpdatingFromConfig = false;
-            }
-        }
+    Settings {
+        id: persistentSettings
+        category: "PasswordInput"
+        property bool isRevealed: false
     }
 
+    property alias isRevealed: persistentSettings.isRevealed
     property real revealProgress: isRevealed ? 1.0 : 0.0
     Behavior on revealProgress {
         NumberAnimation {
@@ -244,10 +236,6 @@ FocusScope {
 
     onIsRevealedChanged: {
         submitButton.triggerSpin();
-        if (root._isUpdatingFromConfig) return;
-        if (typeof Config !== "undefined") {
-            Config.setSetting("inputs.passwordReveal", root.isRevealed);
-        }
     }
 
     onTextChanged: {

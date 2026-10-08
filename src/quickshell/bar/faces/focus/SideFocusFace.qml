@@ -36,6 +36,15 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: (isSolid && !distinctPills) ? 0 : (barWindow ? barWindow.s(root.isCompact ? 5 : 6) : (root.isCompact ? 5 : 6))
 
+        property bool initAnimTrigger: !barWindow || barWindow.startupCascadeFinished
+
+        opacity: initAnimTrigger ? 1.0 : 0.0
+        transform: Translate {
+            x: innerLayout.initAnimTrigger ? 0 : (barWindow ? barWindow.s(15) : 15)
+            Behavior on x { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+        }
+        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+
         IconButton {
             id: focusIconButton
             width: barWindow ? barWindow.s(root.isCompact ? 28 : 30) : (root.isCompact ? 28 : 30)

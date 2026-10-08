@@ -12,27 +12,10 @@ Item {
     readonly property string displayText: appTitle !== "" ? appTitle : appClass
     readonly property bool isFocused: displayText !== ""
 
-    function updateFocus(dataStr) {
-        if (!dataStr) return;
-        let txt = (typeof dataStr === "string" ? dataStr : "").trim();
-        if (txt !== "") {
-            try {
-                let data = JSON.parse(txt);
-                if (data && typeof data === "object") {
-                    root.appClass = data.app_class || "";
-                    root.appTitle = data.app_title || "";
-                }
-            } catch(e) {}
-        }
-    }
-
     Process {
         id: focusDaemon
-        command: ["bash", "-c", "exec " + Caching.serpantinumDir + "/scripts/current_focus.sh"]
+        command: ["bash", "-c", Caching.serpantinumDir + "/scripts/current_focus.sh"]
         running: typeof Caching !== "undefined" && Caching.serpantinumDir !== undefined && Caching.serpantinumDir !== ""
-        stdout: SplitParser {
-            onRead: data => root.updateFocus(data)
-        }
     }
 
     FileView {
@@ -41,13 +24,17 @@ Item {
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {
-            root.updateFocus(text());
-        }
-    }
-
-    Component.onCompleted: {
-        if (typeof focusWatcher.text === "function") {
-            root.updateFocus(focusWatcher.text());
+            let txt = text().trim();
+            if (txt !== "") {
+                try {
+                    let data = JSON.parse(txt);
+                    root.appClass = data.app_class || "";
+                    root.appTitle = data.app_title || "";
+                } catch(e) {}
+            } else {
+                root.appClass = "";
+                root.appTitle = "";
+            }
         }
     }
 }

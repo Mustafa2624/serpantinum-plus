@@ -8,31 +8,14 @@ var MIN_ACCEPT_SCORE = 55;
 function cleanString(str) {
     if (!str) return "";
     var s = String(str);
-    s = s.replace(/\.(?:mp3|flac|wav|m4a|ogg|aac|wma|opus)$/i, "");
-    s = s.replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
     s = s.replace(/\s*[\(\[\{](?:feat\.?|ft\.?|with|official|video|audio|lyrics?|remaster(?:ed)?|deluxe|version|live|radio\s*edit|explicit|clean|bonus|mono|stereo)[^)\]\}]*[)\]\}]/gi, "");
-    s = s.replace(/\s*[-–—|/]\s*(?:official(?:\s+music)?\s+video|lyrics?\s+video|audio|visualizer|mv)\s*$/gi, "");
-    s = s.replace(/\s*[-–—|/]\s*$/g, "");
-    s = s.replace(/^(?:группа|виа|the\s+band)\s+/gi, "");
+    s = s.replace(/\s*[-–—|]\s*(?:official(?:\s+music)?\s+video|lyrics?\s+video|audio|visualizer|mv)\s*$/gi, "");
     s = s.replace(/\s{2,}/g, " ").trim();
     return s;
 }
 
-function splitCompoundTrack(str) {
-    if (!str) return null;
-    var cleaned = cleanString(str);
-    var parts = cleaned.split(/\s*[-–—]\s*/);
-    if (parts.length >= 2 && parts[0].trim() !== "" && parts[1].trim() !== "") {
-        return {
-            part1: cleanString(parts[0]),
-            part2: cleanString(parts.slice(1).join(" - "))
-        };
-    }
-    return null;
-}
-
 function normalizeForMatch(str) {
-    return cleanString(str).toLowerCase().replace(/[\u2018\u2019\u201A\u201B\u2032\u2035“”"']/g, "").replace(/\s+/g, " ").trim();
+    return cleanString(str).toLowerCase().replace(/[“”"']/g, "").replace(/\s+/g, " ").trim();
 }
 
 function durationSecondsFromMpris(length) {
@@ -45,7 +28,7 @@ function durationSecondsFromMpris(length) {
     return len;
 }
 
-function scoreDirect(candidateTitle, candidateArtist, wantTitle, wantArtist) {
+function scoreTitleArtist(candidateTitle, candidateArtist, wantTitle, wantArtist) {
     var t = normalizeForMatch(candidateTitle || "");
     var a = normalizeForMatch(candidateArtist || "");
     var wantT = normalizeForMatch(wantTitle || "");
@@ -64,17 +47,6 @@ function scoreDirect(candidateTitle, candidateArtist, wantTitle, wantArtist) {
     if (wantT && titleScore < 18) return -100;
 
     return titleScore + artistScore;
-}
-
-function scoreTitleArtist(candidateTitle, candidateArtist, wantTitle, wantArtist) {
-    var s1 = scoreDirect(candidateTitle, candidateArtist, wantTitle, wantArtist);
-    var compound = splitCompoundTrack(wantTitle);
-    if (compound) {
-        var s2 = scoreDirect(candidateTitle, candidateArtist, compound.part2, compound.part1);
-        var s3 = scoreDirect(candidateTitle, candidateArtist, compound.part1, compound.part2);
-        return Math.max(s1, s2, s3);
-    }
-    return s1;
 }
 
 function scoreDuration(candidateSec, targetSec) {
@@ -157,18 +129,10 @@ function buildLrclibSearchQueries(session) {
     var queries = [
         ((session.artist || "") + " " + (session.title || "")).trim(),
         ((session.title || "") + " " + (session.artist || "")).trim(),
-        session.title || ""
+        session.title || "",
+        ((session.rawArtist || "") + " " + (session.rawTitle || "")).trim(),
+        session.rawTitle || ""
     ];
-    var compound = splitCompoundTrack(session.title || "");
-    if (compound) {
-        queries.push((compound.part1 + " " + compound.part2).trim());
-        queries.push((compound.part2 + " " + compound.part1).trim());
-        queries.push(compound.part2);
-        queries.push(compound.part1);
-    }
-    queries.push(((session.rawArtist || "") + " " + (session.rawTitle || "")).trim());
-    queries.push(session.rawTitle || "");
-
     var seen = {};
     var uniq = [];
     for (var i = 0; i < queries.length; i++) {

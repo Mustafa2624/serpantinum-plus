@@ -108,11 +108,7 @@ PanelWindow {
         });
     }
 
-    Component.onDestruction: {
-        visible = false;
-        faceLoader.active = false;
-        faceLoader.source = "";
-    }
+    Component.onDestruction: visible = false
 
     function updateEffectiveSize() {
         if (!faceLoader.item) {
@@ -161,7 +157,6 @@ PanelWindow {
         property string wImagePath: root.wImagePath
         property string imagePath: root.wImagePath
         property string path: root.wImagePath
-        visible: root.visible
         source: WidgetRegistry.faceFile(root.wType, root.wVariant)
         width: root.effectiveWidth
         height: root.effectiveHeight
@@ -173,7 +168,6 @@ PanelWindow {
         onLoaded: {
             if (item) {
                 try {
-                    item.visible = Qt.binding(() => root.visible);
                     if (item.imagePath !== undefined) {
                         item.imagePath = Qt.binding(() => root.wImagePath);
                     }

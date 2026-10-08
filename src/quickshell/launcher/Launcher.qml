@@ -200,6 +200,16 @@ PanelWindow {
                 launcherWindow.appsLoaded = false;
             }
         }
+        function onCountChanged() {
+            if (launcherWindow.isVisible) {
+                launcherWindow.loadApps();
+                if (launcherWindow.currentTabIndex === 0) {
+                    launcherWindow.executeFilter(searchInput.text);
+                }
+            } else {
+                launcherWindow.appsLoaded = false;
+            }
+        }
     }
 
     property var defaultLauncherSettings: ({

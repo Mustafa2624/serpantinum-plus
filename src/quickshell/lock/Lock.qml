@@ -54,11 +54,6 @@ Scope {
         SystemInfo.fetch();
         root.updateDeInfo();
         root.updateScreenCount();
-        Quickshell.execDetached(["rm", "-f", Caching.getRunDir("lock") + "/locked"]);
-    }
-
-    Component.onDestruction: {
-        Quickshell.execDetached(["rm", "-f", Caching.getRunDir("lock") + "/locked"]);
     }
 
     Connections {
@@ -213,7 +208,6 @@ Scope {
         root.isUnlocking = false;
         kbWaiter.running = false;
         kbPoller.running = false;
-        Quickshell.execDetached(["rm", "-f", Caching.getRunDir("lock") + "/locked"]);
         if (root.freezeTimestamp !== "") {
             Quickshell.execDetached(["bash", "-c", "rm -f " + Caching.getRunDir("screenshot") + "/lock_freeze_*_" + root.freezeTimestamp + ".png"]);
             root.freezeTimestamp = "";
@@ -227,6 +221,12 @@ Scope {
         }
     }
 
+    Settings {
+        id: lockSettings
+        category: "LockScreen"
+        property bool hidePassword: false
+        property int revealDuration: 300
+    }
 
     QtObject {
         id: lockUI
@@ -288,14 +288,6 @@ Scope {
     WlSessionLock {
         id: rootLock
         locked: false
-        onLockedChanged: {
-            let lockFile = Caching.getRunDir("lock") + "/locked";
-            if (locked) {
-                Quickshell.execDetached(["touch", lockFile]);
-            } else {
-                Quickshell.execDetached(["rm", "-f", lockFile]);
-            }
-        }
 
         surface: Component {
             WlSessionLockSurface {
@@ -793,8 +785,8 @@ Scope {
 
                     Connections {
                         target: surface
-                        function onVisibleChanged() {
-                            if (surface.visible && rootLock.locked && !screenRoot.isUnlocking) {
+                        function onActiveChanged() {
+                            if (surface.active && rootLock.locked && !screenRoot.isUnlocking) {
                                 screenRoot.restoreFocus();
                             }
                         }
@@ -1285,12 +1277,7 @@ Scope {
                                 opacity: mainDashboardShell.opacity
                                 scale: mainDashboardShell.scale
                                 visible: mainDashboardShell.visible
-                                transform: Scale {
-                                    origin.x: mainDashboardShell.width / 2
-                                    origin.y: mainDashboardShell.height / 2
-                                    xScale: screenRoot.isUnlocking ? screenRoot.foldScaleX : 1.0
-                                    yScale: screenRoot.isUnlocking ? screenRoot.foldScaleY : 1.0
-                                }
+                                transform: mainDashboardShell.transform
                             }
 
                             Rectangle {
@@ -1439,6 +1426,7 @@ Scope {
                                                 hasError: lockUI.failed
                                                 isBusy: lockUI.authenticating
                                                 isWidgetVisible: rootLock.locked && screenRoot.inputActive
+                                                isRevealed: !lockSettings.hidePassword
 
                                                 onActiveFocusChanged: {
                                                     if (!activeFocus && rootLock.locked && !screenRoot.isUnlocking && screenRoot.inputActive) {
@@ -2096,19 +2084,65 @@ Scope {
                                             maskSource: mediaBgMask
                                         }
 
-                                        Visualizer {
+                                        Row {
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.bottom: parent.bottom
                                             height: Math.max(30, parent.height * 0.85)
-                                            active: screenRoot.isCavaSubscribed
-                                            count: Math.min(32, Math.max(4, Math.floor(width / (5 + spacing))))
-                                            spacing: Math.max(2, Math.floor(width * 0.008))
-                                            rise: 0.5
-                                            fall: 0.5
-                                            maxLength: height * 0.9
-                                            opacityBase: 0.22
-                                            opacityRange: 0.18
+                                            spacing: Math.max(2, Math.floor(parent.width * 0.008))
+
+                                            property int barCount: 32
+                                            property real barSpacing: spacing
+                                            property int activeBars: Math.min(barCount, Math.max(4, Math.floor(parent.width / (5 + barSpacing))))
+                                            property var barLevels: {
+                                                let source = Cava.barLevels;
+                                                let count = activeBars;
+                                                let out = [];
+                                                if (!source || source.length === 0) {
+                                                    for (let i = 0; i < count; i++) out.push(0.0);
+                                                    return out;
+                                                }
+                                                let srcLen = source.length;
+                                                let half = (count - 1) / 2;
+                                                for (let i = 0; i < count; i++) {
+                                                    let distFromCenter = Math.abs(i - half);
+                                                    let norm = half > 0 ? (distFromCenter / half) : 0;
+                                                    let pos = Math.pow(norm, 1.25) * (srcLen - 1);
+                                                    let idx0 = Math.floor(pos);
+                                                    let idx1 = Math.min(srcLen - 1, idx0 + 1);
+                                                    let frac = pos - idx0;
+                                                    let v0 = source[idx0] || 0.0;
+                                                    let v1 = source[idx1] || 0.0;
+                                                    let rawVal = v0 + (v1 - v0) * frac;
+                                                    let val = rawVal < 0.03 ? 0.0 : Math.pow((rawVal - 0.03) / 0.97, 1.15);
+                                                    out.push(Math.max(0.0, Math.min(1.0, val)));
+                                                }
+                                                return out;
+                                            }
+
+                                            Repeater {
+                                                model: parent.activeBars
+                                                delegate: Rectangle {
+                                                    width: (parent.width - (parent.activeBars - 1) * parent.barSpacing) / parent.activeBars
+                                                    height: Math.max(2, level * parent.height * 0.9)
+                                                    topLeftRadius: width * 0.5
+                                                    topRightRadius: width * 0.5
+                                                    bottomLeftRadius: 0
+                                                    bottomRightRadius: 0
+                                                    color: ThemeBackend.mauve
+                                                    opacity: 0.22 + (level * 0.18)
+                                                    anchors.bottom: parent.bottom
+
+                                                    Behavior on height {
+                                                        NumberAnimation { duration: 75; easing.type: Easing.OutCubic }
+                                                    }
+                                                    Behavior on opacity {
+                                                        NumberAnimation { duration: 75; easing.type: Easing.OutQuad }
+                                                    }
+
+                                                    property real level: (parent.barLevels && index < parent.barLevels.length) ? parent.barLevels[index] : 0.0
+                                                }
+                                            }
                                         }
                                     }
 

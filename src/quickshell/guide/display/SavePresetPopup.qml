@@ -91,7 +91,7 @@ Popup {
         let cacheDir = (typeof Caching !== "undefined" && typeof Caching.getCacheDir === "function")
             ? Caching.getCacheDir("wallpaper") : "";
         if (isVid || !p) {
-            let monSnap = (cacheDir && monName) ? (cacheDir + "/current_wallpaper_" + monName + ".png") : "";
+            let monSnap = cacheDir ? (cacheDir + "/current_wallpaper_" + monName + ".png") : "";
             if (monSnap) return "file://" + monSnap;
             let genSnap = cacheDir ? (cacheDir + "/current_wallpaper.png") : "";
             if (genSnap) return "file://" + genSnap;
@@ -238,7 +238,7 @@ Popup {
 
                     Image {
                         anchors.fill: parent
-                        source: (savePresetPopup.visible && savePresetPopup.targetMonitor) ? savePresetPopup.getWallpaperSource(savePresetPopup.targetMonitor) : ""
+                        source: savePresetPopup.getWallpaperSource(savePresetPopup.targetMonitor)
                         fillMode: Image.PreserveAspectCrop
                         smooth: true
                         cache: true

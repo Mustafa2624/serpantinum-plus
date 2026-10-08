@@ -120,7 +120,7 @@ Item {
             if (i < modelData.words.length - 1) {
                 let nextW = modelData.words[i + 1];
                 if (!w.text.endsWith(" ") && !nextW.text.startsWith(" ")) {
-                    if (/\S/.test(w.text) && !/^[,.\!?:;)\]]/.test(nextW.text)) {
+                    if (/[\w\.,!\?]/.test(w.text)) {
                         space = " ";
                     }
                 }

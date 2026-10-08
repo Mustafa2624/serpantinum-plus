@@ -138,11 +138,6 @@ Item {
             let parsed = JSON.parse(txt);
             root.data = parsed;
 
-            if (parsed.offline === true) {
-                root.currentTemp = "";
-                root.currentTempFormatted = "--°";
-            }
-
             if (parsed.current_icon !== undefined) {
                 root.currentIcon = parsed.current_icon;
             }
