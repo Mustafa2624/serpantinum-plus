@@ -19,7 +19,11 @@ begin_step() {
         local ticks=0
         while sleep 5; do
             ticks=$((ticks + 1))
-            if [[ "$label" == Downloading* ]] && [[ -t 1 ]] && ((ticks < 3)); then continue; fi
+            if [[ "$label" == Downloading* ]]; then
+                # curl owns the terminal while its progress bar is active. A
+                # second writer corrupts its carriage-return updates.
+                if [[ -t 1 ]] || ((ticks < 3)); then continue; fi
+            fi
             printf '%s\n' "$heartbeat_text"
         done
     ) &
