@@ -44,6 +44,8 @@ bash custom/install-addons.sh             # install
   </tr>
 </table>
 
+The **System Info** bar module shows CPU load, memory use, and temperature; click it to open `btop`.
+
 ### In Quickactions
 
 <table>

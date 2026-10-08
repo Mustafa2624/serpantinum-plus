@@ -1,0 +1,270 @@
+--- a/src/quickshell/bar/BarModuleRegistry.qml
++++ b/src/quickshell/bar/BarModuleRegistry.qml
+@@ -11,7 +11,7 @@
+         let s = String(id).toLowerCase().trim();
+         if (s === "timedate" || s === "time" || s === "clock") return "timedate";
+         if (s === "info" || s === "indicator" || s === "indicators" || s === "record") return "info";
+-        if (s === "sysinfo" || s === "systeminfo") return "sysmon";
++        if (s === "sysinfo" || s === "systeminfo") return "sysinfo";
+         if (s === "volume" || s === "vol") return "vol";
+         if (s === "battery" || s === "bat") return "bat";
+         if (s === "visualizer" || s === "viswidget" || s === "vis") return "vis";
+@@ -169,6 +169,13 @@
+             horizontalFace: "faces/sysmon/SysMonFace.qml",
+             verticalFace: "faces/sysmon/SideSysMonFace.qml"
+         },
++        "sysinfo": {
++            name: "System Info",
++            icon: "\uf2db",
++            defaultVariant: "default",
++            horizontalFace: "faces/sysinfo/SysInfoFace.qml",
++            verticalFace: "faces/sysinfo/SideSysInfoFace.qml"
++        },
+         "kb": {
+             name: typeof I18n !== "undefined" ? I18n.t("guide.bar.modules.keyboard", "Keyboard") : "Keyboard",
+             icon: "󰌌",
+--- a/src/quickshell/quickactions/Floating.qml
++++ b/src/quickshell/quickactions/Floating.qml
+@@ -12,6 +12,55 @@
+     delegate: Component {
+         PanelWindow {
+             id: floatingWidget
++
++            function closeQuickActions() {
++                floatingWidget.isPinned = false;
++                floatingWidget.isExpanded = false;
++                floatingWidget.isSidebarVisible = false;
++                floatingWidget.isPeekVisible = false;
++                floatingWidget.useGraceTimer = false;
++                hideTimer.stop();
++                peekHideTimer.stop();
++            }
++
++            IpcHandler {
++                target: "quickactions"
++                function toggle() { floatingWidget.shortcutToggle(); }
++                function show() {
++                    let edge = floatingWidget.barPosition === "left" ? "right"
++                        : floatingWidget.barPosition === "right" ? "left" : floatingWidget.activeEdge;
++                    floatingWidget.isPinned = false;
++                    floatingWidget.isExpanded = false;
++                    floatingWidget.showSidebar(edge, floatingWidget.height / 2, false);
++                    floatingWidget.isPinned = true;
++                    floatingWidget.isExpanded = false;
++                    hideTimer.stop();
++                    peekHideTimer.stop();
++                }
++                function hide() { floatingWidget.closeQuickActions(); }
++                function nextSection() {
++                    if (!floatingWidget.isSidebarVisible) return;
++                    let step = floatingWidget.activeEdge === "right" ? -1 : 1;
++                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
++                }
++                function previousSection() {
++                    if (!floatingWidget.isSidebarVisible) return;
++                    let step = floatingWidget.activeEdge === "right" ? 1 : -1;
++                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
++                }
++                function moveForward() { floatingWidget.moveOpenedLayout(1); }
++                function moveBackward() { floatingWidget.moveOpenedLayout(-1); }
++                function expand() {
++                    if (!floatingWidget.isSidebarVisible) return;
++                    floatingWidget.isExpanded = true;
++                    hideTimer.stop();
++                }
++                function collapse() {
++                    if (!floatingWidget.isSidebarVisible) return;
++                    floatingWidget.isExpanded = false;
++                    hideTimer.stop();
++                }
++            }
+             required property var modelData
+             screen: modelData
+ 
+@@ -307,6 +356,46 @@
+                 hideTimer.restart();
+             }
+ 
++            function shortcutToggle() {
++                if (
++                    floatingWidget.isSidebarVisible ||
++                    floatingWidget.isPinned
++                ) {
++                    floatingWidget.closeQuickActions();
++                    return;
++                }
++
++                let edge;
++
++                if (floatingWidget.barPosition === "left") {
++                    edge = "right";
++                } else if (floatingWidget.barPosition === "right") {
++                    edge = "left";
++                } else {
++                    edge = floatingWidget.activeEdge;
++                }
++
++                floatingWidget.isPinned = false;
++
++                // Open only the tab strip. The selected module stays unloaded
++                // until the user explicitly expands it.
++                floatingWidget.showSidebar(
++                    edge,
++                    floatingWidget.height / 2,
++                    false
++                );
++
++                // showSidebar() refuses to open while pinned, so pin after
++                // the sidebar has been made visible.
++                floatingWidget.isPinned = true;
++                floatingWidget.isExpanded = false;
++                floatingWidget.isPeekVisible = false;
++                floatingWidget.useGraceTimer = false;
++
++                hideTimer.stop();
++                peekHideTimer.stop();
++            }
++
+             function childIntercepts(sequenceStr) {
+                 if (!isExpanded) return false;
+ 
+@@ -740,6 +829,128 @@
+                 peekHideTimer.stop();
+             }
+ 
++            function moveOpenedLayout(step) {
++                if (!floatingWidget.isSidebarVisible)
++                    return;
++
++                // Treat the four edges as one continuous perimeter.
++                //
++                // Perimeter coordinate:
++                //   0.00 = top-left
++                //   1.00 = top-right
++                //   2.00 = bottom-right
++                //   3.00 = bottom-left
++                //   4.00 = top-left again
++                //
++                // Every shortcut press moves exactly 25% of one screen edge.
++
++                let xSpan = Math.max(
++                    1,
++                    floatingWidget.rightBound -
++                    floatingWidget.leftBound
++                );
++
++                let ySpan = Math.max(
++                    1,
++                    floatingWidget.bottomBound -
++                    floatingWidget.topBound
++                );
++
++                let t = 0;
++
++                if (floatingWidget.activeEdge === "top") {
++                    t =
++                        (
++                            floatingWidget.currentPos -
++                            floatingWidget.leftBound
++                        ) / xSpan;
++
++                } else if (floatingWidget.activeEdge === "right") {
++                    t =
++                        1 +
++                        (
++                            floatingWidget.currentPos -
++                            floatingWidget.topBound
++                        ) / ySpan;
++
++                } else if (floatingWidget.activeEdge === "bottom") {
++                    t =
++                        2 +
++                        (
++                            floatingWidget.rightBound -
++                            floatingWidget.currentPos
++                        ) / xSpan;
++
++                } else if (floatingWidget.activeEdge === "left") {
++                    t =
++                        3 +
++                        (
++                            floatingWidget.bottomBound -
++                            floatingWidget.currentPos
++                        ) / ySpan;
++                }
++
++                // Keep it in [0, 4).
++                t =
++                    (
++                        t % 4 + 4
++                    ) % 4;
++
++                // One press = exactly 25% of an edge.
++                t += step * 0.25;
++
++                t =
++                    (
++                        t % 4 + 4
++                    ) % 4;
++
++                let nextEdge = "";
++                let nextPos = 0;
++
++                if (t < 1) {
++                    nextEdge = "top";
++                    nextPos =
++                        floatingWidget.leftBound +
++                        t * xSpan;
++
++                } else if (t < 2) {
++                    nextEdge = "right";
++                    nextPos =
++                        floatingWidget.topBound +
++                        (t - 1) * ySpan;
++
++                } else if (t < 3) {
++                    nextEdge = "bottom";
++                    nextPos =
++                        floatingWidget.rightBound -
++                        (t - 2) * xSpan;
++
++                } else {
++                    nextEdge = "left";
++                    nextPos =
++                        floatingWidget.bottomBound -
++                        (t - 3) * ySpan;
++                }
++
++                edgeTransitionTimer.stop();
++                teleportTimer.stop();
++
++                floatingWidget.pendingEdge = "";
++                floatingWidget.pendingPos = 0;
++                floatingWidget.pendingMode = "";
++
++                floatingWidget.disableAnim = false;
++                floatingWidget.currentPos = nextPos;
++                floatingWidget.activeEdge = nextEdge;
++                floatingWidget.isPeekVisible = false;
++                floatingWidget.isSidebarVisible = true;
++
++                if (floatingWidget.isPinned)
++                    hideTimer.stop();
++                else
++                    floatingWidget.kickTimer();
++            }
++
+             function showSidebar(edge, pos, expand) {
+                 SysData.prewarm();
+                 if (isPinned || edge === barPosition) return;
+--- a/src/quickshell/singletons/widgetcontrols/FloatingController.qml
++++ b/src/quickshell/singletons/widgetcontrols/FloatingController.qml
+@@ -33,7 +33,7 @@
+     }
+ 
+     IpcHandler {
+-        target: "quickactions"
++        target: "quickactions-legacy"
+         function toggle() { controller.requestQuickaction("toggle"); }
+         function previousSection() { controller.requestQuickaction("previousSection"); }
+         function nextSection() { controller.requestQuickaction("nextSection"); }
