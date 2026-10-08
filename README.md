@@ -2,7 +2,7 @@
   <img src="docs/assets/banner.png" alt="Serpantinum Plus banner" width="850" />
 
   <h1>Serpantinum Plus</h1>
-  <p>A Hyprland desktop shell fork with handy media tools and quick actions.</p>
+  <p>Serpantinum for Hyprland, plus a video downloader, music player, window overview, drop shelf and Snake.</p>
 
   <a href="LICENSE.md"><img alt="AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg"></a>
   <img alt="Arch Linux" src="https://img.shields.io/badge/platform-Arch%20Linux-1793D1?logo=arch-linux&logoColor=white">
@@ -10,136 +10,63 @@
   <img alt="Quickshell" src="https://img.shields.io/badge/shell-Quickshell-7B68EE">
 </div>
 
-## Contents
+## Install
 
-- [What's new](#whats-new)
-- [Fork vs upstream](#fork-vs-upstream)
-- [Features](#features)
-- [Installation](#installation)
-- [Running](#running)
-- [Requirements / Setup](#requirements--setup)
-- [Updating](#updating)
-- [Troubleshooting](#troubleshooting)
-- [Credits](#credits)
-
-## What's new
-
-| Feature | What it does | Where |
-|---|---|---|
-| Video downloader | Download videos, audio, playlists, and transcripts with yt-dlp. | Bar |
-| Music player | Browse a local library and control playback, repeat, shuffle, and seeking. | Bar and Quickactions |
-| Drop shelf | Hold files and links temporarily while dragging and dropping. | Quickactions |
-| Snake | Play Snake from the Quickactions switcher. | Quickactions |
-| Expose overview | Show open windows across workspaces in a macOS-inspired overview. | Bar |
-
-## Fork vs upstream
-
-| | Original Serpantinum | Serpantinum Plus |
-|---|---|---|
-| Core shell and installer | Yes | Based on the original project |
-| Video downloader and music player | — | Added |
-| Quickactions drop shelf and Snake | — | Added |
-| Expose overview across workspaces | — | Added |
-
-## Features
-
-### Video downloader
-
-A bar pill opens yt-dlp controls for video, audio, playlists, and transcripts. It requires `yt-dlp` and `ffmpeg` on `PATH`.
-
-![Video downloader](docs/screenshots/video-downloader.png)
-
-### Music player
-
-Play local music from the bar or Quickactions with a library, seekbar, repeat, shuffle, and previous/play-pause/next controls. Playback uses `mpv`.
-
-![Music player](docs/screenshots/music-player.jpg)
-
-### Drop shelf
-
-Keep files and links in a temporary Quickactions shelf, ready to drag into another app.
-
-![Drop shelf](docs/screenshots/drop-shelf.jpg)
-
-### Snake
-
-Play Snake as an item in the Quickactions switcher.
-
-![Snake game](docs/screenshots/snake-game.jpg)
-
-### Expose overview
-
-Open a macOS-inspired overview from the bar to see and activate windows across all workspaces.
-
-![Expose overview](docs/screenshots/expose-overview.jpg)
-
-## Installation
-
-> **Migrating from v1:** The installer backs up selected compositor configurations during legacy migration. Serpantinum is now a shell; compositor settings such as monitors, keybinds, and autostart remain yours to configure. This fork includes [sample Hyprland configuration and keybinds](compositors/hyprland/config/keybinds.lua) in [`compositors/`](compositors/).
-
-### Path A - Fresh install (whole shell from this fork)
-
-1. Clone this fork and enter the checkout:
-
-   ```bash
-   git clone --depth 1 --branch master https://github.com/Mustafa2624/serpantinum-plus.git
-   cd serpantinum-plus
-   ```
-
-2. Run this fork's installer:
-
-   ```bash
-   REPO_SLUG=Mustafa2624/serpantinum-plus bash install/install.sh
-   ```
-
-   The installer uses the checked-out fork source. The original project's installer is documented by the upstream project; the command above installs Serpantinum Plus.
-
-3. Restart the shell after installation:
-
-   ```bash
-   serpantinumd stop && serpantinumd start
-   ```
-
-### Path B - Already have Serpantinum (install only my additions)
-
-1. From this fork checkout, preview the add-on overlay and integration patches against your existing install:
-
-   ```bash
-   bash custom/install-addons.sh --dry-run
-   ```
-
-2. If the preview succeeds, apply the additions. The installer backs up every patched or newly added file before changing anything:
-
-   ```bash
-   bash custom/install-addons.sh
-   ```
-
-3. Restart the shell:
-
-   ```bash
-   serpantinumd stop && serpantinumd start
-   ```
-
-   To remove the additions and restore the backup, run `bash custom/install-addons.sh --uninstall`.
-
-## Running
-
-Launch the shell with:
+**Already have Serpantinum?** Add only my modules. The installer previews its changes, asks first, and backs up everything it touches. When it changes files, it stops and starts the shell if `serpantinumd` is available; otherwise it tells you to restart manually:
 
 ```bash
-serpantinumd start
+bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/custom/install-addons.sh)
 ```
 
-## Requirements / Setup
+**Starting fresh?** Install the whole shell with my modules included. Pick **Install** in the menu. At the end, the installer asks whether to reboot the computer; if it does not reboot, it then starts the shell:
 
-- Arch Linux or an Arch-based distribution, Hyprland, and Quickshell. The fork installer installs the shell's declared system dependencies.
-- The fork installer includes `yt-dlp`, `mpv`, and `ffmpeg` in its package list. The add-on installer does not install system packages; it reports any of these tools that are missing.
-- Clipboard integration uses `wl-paste` and `cliphist`; the installer includes `wl-clipboard` and `cliphist`.
-- The equalizer integration uses EasyEffects, which is included in the installer's dependency list.
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/install/install.sh)
+```
 
-### Required autostart
+**Update:** run the same command again (in the full installer, pick **Update**).
+**Remove my modules:** add `--uninstall` to the add-ons command.
 
-Add clipboard listeners and the EasyEffects user service to your compositor's startup configuration. Example on Hyprland:
+<details>
+<summary>Prefer to read the script first?</summary>
+
+```bash
+git clone --depth 1 https://github.com/Mustafa2624/serpantinum-plus.git
+cd serpantinum-plus
+bash custom/install-addons.sh --dry-run   # preview, changes nothing
+bash custom/install-addons.sh             # install
+```
+
+</details>
+
+## What's inside
+
+### In the bar
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/video-downloader.png" width="300" alt="Video downloader"><br><b>Video downloader</b><br><sub>Video, audio, playlists and transcripts via yt-dlp</sub></td>
+    <td align="center"><img src="docs/screenshots/music-player.jpg" width="300" alt="Music player"><br><b>Music player</b><br><sub>Local library, seekbar, shuffle, repeat</sub></td>
+    <td align="center"><img src="docs/screenshots/expose-overview.jpg" width="300" alt="Expose overview"><br><b>Expose overview</b><br><sub>All windows from every workspace, macOS style</sub></td>
+  </tr>
+</table>
+
+### In Quickactions
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/music-player.jpg" width="300" alt="Music player"><br><b>Music player</b><br><sub>Also available from Quickactions</sub></td>
+    <td align="center"><img src="docs/screenshots/drop-shelf.jpg" width="300" alt="Drop shelf"><br><b>Drop shelf</b><br><sub>Hold files and links, drag them out when needed</sub></td>
+    <td align="center"><img src="docs/screenshots/snake-game.jpg" width="300" alt="Snake"><br><b>Snake</b><br><sub>A quick game in the Quickactions switcher</sub></td>
+  </tr>
+</table>
+
+## Setup
+
+Start the shell with `serpantinumd start`. Needs Arch Linux (or similar), Hyprland and Quickshell.
+
+<details>
+<summary>Autostart lines for clipboard and equalizer</summary>
 
 ```lua
 hl.on("hyprland.start", function()
@@ -149,67 +76,34 @@ hl.on("hyprland.start", function()
 end)
 ```
 
-## Updating
-
-Before updating an existing upstream Serpantinum installation, remove the add-ons so the updater can operate on the original files:
-
-```bash
-bash custom/install-addons.sh --uninstall
-```
-
-After the upstream update completes, apply the add-ons again from this checkout:
-
-```bash
-bash custom/install-addons.sh --dry-run
-bash custom/install-addons.sh
-serpantinumd stop && serpantinumd start
-```
-
-The shell's update-available check currently reads upstream `ilyamiro/serpantinum`'s `version.txt`. An upstream update can replace installed source files, so uninstall these patches before updating and reinstall them afterward.
-
-## Troubleshooting
-
-<details>
-<summary>The video downloader says a dependency is missing</summary>
-
-Install `yt-dlp` and ensure both `yt-dlp` and `ffmpeg` are available on `PATH`, then restart Serpantinum.
+Sample Hyprland configs and keybinds are in [`compositors/`](compositors/).
 
 </details>
 
 <details>
-<summary>The music player cannot start playback</summary>
+<summary>Something not working?</summary>
 
-Install `mpv`, make sure it is available on `PATH`, and restart Serpantinum.
-
-</details>
-
-<details>
-<summary>Clipboard history or the equalizer is not working</summary>
-
-Check the required autostart commands above. Clipboard history needs `wl-paste` and `cliphist`; the equalizer needs the EasyEffects user service.
+- **Downloader error:** install `yt-dlp` and `ffmpeg`, then restart the shell.
+- **No music playback:** install `mpv`, then restart the shell.
+- **Clipboard or equalizer missing:** add the autostart lines above.
+- **Coming from Serpantinum v1:** your old config is backed up by the installer. Monitors, keybinds and autostart are now yours to set.
 
 </details>
 
-## Credits
+## Credits and license
 
-Serpantinum Plus is based on [Serpantinum by ilyamiro](https://github.com/ilyamiro/serpantinum). Snake is inspired by [jhgundersen/omarchy-snake-plugin](https://github.com/jhgundersen/omarchy-snake-plugin), and the downloader is inspired by [dlpwaters/omarchy-yt-downloader](https://github.com/dlpwaters/omarchy-yt-downloader). Special thanks to Darkall44/Qylock for the material SDDM theme.
+Based on [Serpantinum by ilyamiro](https://github.com/ilyamiro/serpantinum). Snake is inspired by [omarchy-snake-plugin](https://github.com/jhgundersen/omarchy-snake-plugin), the downloader by [omarchy-yt-downloader](https://github.com/dlpwaters/omarchy-yt-downloader). Thanks to Darkall44/Qylock for the material SDDM theme.
 
 [![Support the original author (ilyamiro)](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ilyamiro)
 
-## License
+AGPL-3.0-or-later, see [LICENSE.md](LICENSE.md). Third-party notices: [`custom/THIRD_PARTY_NOTICES.md`](custom/THIRD_PARTY_NOTICES.md).
 
-The original Serpantinum code is distributed under the GNU Affero General Public License, version 3 or later; see [LICENSE.md](LICENSE.md). Third-party component terms and attribution for custom additions are listed in [`custom/THIRD_PARTY_NOTICES.md`](custom/THIRD_PARTY_NOTICES.md).
+Copyright (C) 2026 Illia Miroshnichenko. Modified by Mustafa2624, 2026.
 
-Copyright (C) 2026 Illia Miroshnichenko
-
-Modified by Mustafa2624, 2026.
-
-<br><br><br>
+<details>
+<summary>Upstream contributors</summary>
 
 <div align="center">
-  <h3>Upstream contributors</h3>
-  <br>
-
   <a href="https://github.com/TheRinder2"><img src="https://avatars.githubusercontent.com/u/48689803?v=4&s=48" width="48" height="48" alt="TheRinder2"></a>
   <a href="https://github.com/bizneskind-droid"><img src="https://avatars.githubusercontent.com/u/245046997?v=4&s=48" width="48" height="48" alt="bizneskind-droid"></a>
   <a href="https://github.com/Pigeon78"><img src="https://avatars.githubusercontent.com/u/151051379?v=4&s=48" width="48" height="48" alt="Pigeon78"></a>
@@ -232,3 +126,5 @@ Modified by Mustafa2624, 2026.
   <a href="https://github.com/kranks-uga"><img src="https://avatars.githubusercontent.com/u/179175113?v=4&s=48" width="48" height="48" alt="kranks-uga"></a>
   <a href="https://github.com/zynx-real"><img src="https://avatars.githubusercontent.com/u/320626542?v=4&s=48" width="48" height="48" alt="zynx-real"></a>
 </div>
+
+</details>
