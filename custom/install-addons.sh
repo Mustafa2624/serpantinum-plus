@@ -145,8 +145,8 @@ if [[ ! -f "$source_dir/patches/addons.patch" || ! -d "$source_dir/overlay/src" 
     fi
     trap 'rm -rf -- "$bootstrap_dir"' EXIT
     archive_url="${SERPANTINUM_PLUS_TARBALL:-https://github.com/Mustafa2624/serpantinum-plus/archive/refs/heads/master.tar.gz}"
-    printf 'Before downloading: I will fetch the Serpantinum Plus installer archive; nothing has been changed yet. Size is not published.\n'
-    run_step 'Downloading Serpantinum Plus (size unknown)...' 'Nothing was changed.' 'Still downloading...' download_archive "$archive_url" "$bootstrap_dir/repo.tar.gz"
+    printf 'Before downloading: I will fetch the Serpantinum Plus installer archive; nothing has been changed yet. GitHub sends no archive size, so progress shows bytes received.\n'
+    run_step 'Downloading Serpantinum Plus (showing bytes received)...' 'Nothing was changed.' 'Still downloading...' download_archive "$archive_url" "$bootstrap_dir/repo.tar.gz"
     # shellcheck disable=SC2329
     unpack_bootstrap() {
         mkdir -p "$bootstrap_dir/extracted" || return 1

@@ -116,7 +116,7 @@ if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/install/modules/deps.sh" || ! -d
     command -v curl &>/dev/null || { echo "curl is required to download the installer source." >&2; exit 1; }
     command -v tar &>/dev/null || { echo "tar is required to extract the installer source." >&2; exit 1; }
     SOURCE_URL="${SERPANTINUM_PLUS_TARBALL:-https://github.com/${REPO_SLUG}/archive/refs/heads/master.tar.gz}"
-    printf 'Before downloading: I will fetch the Serpantinum Plus source archive; nothing has been changed yet. Archive size varies and is not published.\n'
+    printf 'Before downloading: I will fetch the Serpantinum Plus source archive; nothing has been changed yet. GitHub sends no archive size, so progress shows bytes received.\n'
     download_source() {
         mkdir -p "$CACHE_BASE" || return 1
         SOURCE_CACHE="$CACHE_BASE/source"
@@ -130,7 +130,7 @@ if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/install/modules/deps.sh" || ! -d
             return "$curl_status"
         fi
     }
-    run_step 'Downloading Serpantinum Plus (size varies)...' 'No files were changed.' 'Still downloading...' download_source
+    run_step 'Downloading Serpantinum Plus (showing bytes received)...' 'No files were changed.' 'Still downloading...' download_source
     unpack_source() {
         if ! tar -xzf "$SOURCE_ARCHIVE" --strip-components=1 -C "$SOURCE_STAGE"; then
             rm -rf -- "$SOURCE_STAGE" "$SOURCE_ARCHIVE"
