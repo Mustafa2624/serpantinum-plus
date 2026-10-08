@@ -52,28 +52,24 @@ install_wallpapers() {
     local full_pack="${1:-true}"
     local wallpaper_dir
     wallpaper_dir=$(get_wallpaper_dir)
-    local wallpaper_repo="https://github.com/ilyamiro/shell-wallpapers.git"
     local clone_dir="${XDG_CACHE_HOME:-"$HOME/.cache"}/serpantinum-wallpapers"
+    local archive_file="${clone_dir}.tar.gz"
+    local extract_dir="${clone_dir}.extract.$$"
 
     mkdir -p "$wallpaper_dir"
-
-    local sync_success=false
-    if [ -d "$clone_dir/.git" ]; then
-        if git -C "$clone_dir" fetch --depth 1 origin 2>/dev/null; then
-            if git -C "$clone_dir" reset --hard FETCH_HEAD 2>/dev/null || \
-               git -C "$clone_dir" reset --hard origin/HEAD 2>/dev/null || \
-               git -C "$clone_dir" reset --hard origin/main 2>/dev/null || \
-               git -C "$clone_dir" reset --hard origin/master 2>/dev/null; then
-                sync_success=true
-            fi
-        fi
+    mkdir -p "$(dirname "$clone_dir")"
+    rm -rf -- "$clone_dir" "$extract_dir"
+    mkdir -p "$extract_dir"
+    echo -e "\n\e[36m[ INFO ]\e[0m Downloading wallpapers archive..."
+    if curl -fsSL https://api.github.com/repos/ilyamiro/shell-wallpapers/tarball -o "$archive_file" 2>/dev/null && \
+        tar -xzf "$archive_file" --strip-components=1 -C "$extract_dir" 2>/dev/null; then
+        mv -- "$extract_dir" "$clone_dir"
+    else
+        rm -rf -- "$extract_dir"
+        rm -f -- "$archive_file"
+        return 0
     fi
-
-    if [ "$sync_success" != true ]; then
-        rm -rf "$clone_dir"
-        echo -e "\n\e[36m[ INFO ]\e[0m Cloning wallpapers repository..."
-        git clone --depth 1 "$wallpaper_repo" "$clone_dir" 2>/dev/null || true
-    fi
+    rm -f -- "$archive_file"
 
     local src_dir="$clone_dir"
     if [ -d "$clone_dir/images" ]; then
@@ -104,7 +100,14 @@ install_wallpapers() {
             find "$src_dir" -type f ! -name "README.md" ! -name "LICENSE" ! -path "*/.git/*" -exec cp {} "$wallpaper_dir/" \; 2>/dev/null || true
         fi
     else
-        if [ -z "$(ls -A "$wallpaper_dir" 2>/dev/null | grep -iE '\.(jpg|jpeg|png|gif|webp)$')" ]; then
+        local has_wallpaper=false
+        for image in "$wallpaper_dir"/*.[jJ][pP][gG] "$wallpaper_dir"/*.[jJ][pP][eE][gG] "$wallpaper_dir"/*.[pP][nN][gG] "$wallpaper_dir"/*.[gG][iI][fF] "$wallpaper_dir"/*.[wW][eE][bB][pP]; do
+            if [ -f "$image" ]; then
+                has_wallpaper=true
+                break
+            fi
+        done
+        if [ "$has_wallpaper" = false ]; then
             local random_pics=()
             while IFS= read -r pic; do
                 [[ -n "$pic" ]] && random_pics+=("$pic")
@@ -305,7 +308,8 @@ deploy_package() {
 
                 local TARGET_CONFIG_DIR="$HOME/.config/$target_config_name"
                 local BACKUP_BASE="$HOME/.config/${target_config_name}_backup"
-                local BACKUP_DIR="$BACKUP_BASE/backup_$(date +%Y%m%d_%H%M%S)"
+                local BACKUP_DIR
+                BACKUP_DIR="$BACKUP_BASE/backup_$(date +%Y%m%d_%H%M%S)"
 
                 local SRC_COMP_DIR=""
                 if [ -d "$REPO_ROOT/compositors/$comp" ] && [ "$(ls -A "$REPO_ROOT/compositors/$comp" 2>/dev/null)" ]; then
@@ -324,7 +328,7 @@ deploy_package() {
                     cp -r "$SRC_COMP_DIR/." "$TARGET_CONFIG_DIR/"
 
                     find "$TARGET_CONFIG_DIR" -type f -o -type l | while IFS= read -r dest_file; do
-                        local rel_path="${dest_file#$TARGET_CONFIG_DIR/}"
+                        local rel_path="${dest_file#"$TARGET_CONFIG_DIR"/}"
                         if [ ! -e "$SRC_COMP_DIR/$rel_path" ] && [ ! -L "$SRC_COMP_DIR/$rel_path" ]; then
                             rm -f "$dest_file"
                         fi

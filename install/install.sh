@@ -5,7 +5,7 @@ set -e
 setterm -blank 0 -powerdown 0 2>/dev/null || true
 printf '\033[9;0]' 2>/dev/null || true
 
-RAW_SLUG="${REPO_SLUG:-ilyamiro/serpantinum}"
+RAW_SLUG="${REPO_SLUG:-Mustafa2624/serpantinum-plus}"
 REPO_SLUG="$(printf '%s' "$RAW_SLUG" | tr -d '\r\n\t ' | sed 's/[^a-zA-Z0-9_\/-]//g')"
 CACHE_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/serpantinum-installer"
 export REPO_SLUG
@@ -19,33 +19,59 @@ else
 fi
 
 if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/install/modules/deps.sh" || ! -d "$PROJECT_ROOT/src" ]]; then
-    command -v git &>/dev/null || sudo pacman -Sy --noconfirm --needed git
-    if [ ! -d "$CACHE_BASE/.git" ]; then
-        rm -rf "$CACHE_BASE"
-        mkdir -p "$CACHE_BASE"
-        git clone "https://github.com/${REPO_SLUG}.git" "$CACHE_BASE"
-    else
-        git -C "$CACHE_BASE" remote set-url origin "https://github.com/${REPO_SLUG}.git" 2>/dev/null || true
-        git -C "$CACHE_BASE" fetch origin 2>/dev/null || true
-        git -C "$CACHE_BASE" reset --hard origin/HEAD 2>/dev/null || git -C "$CACHE_BASE" reset --hard origin/main 2>/dev/null || git -C "$CACHE_BASE" reset --hard origin/master 2>/dev/null || true
-    fi
-    INSTALL_DIR="$CACHE_BASE/install"
-    PROJECT_ROOT="$CACHE_BASE"
+    command -v curl &>/dev/null || { echo "curl is required to download the installer source." >&2; exit 1; }
+    command -v tar &>/dev/null || { echo "tar is required to extract the installer source." >&2; exit 1; }
+    mkdir -p "$CACHE_BASE"
+    SOURCE_CACHE="$CACHE_BASE/source"
+    SOURCE_STAGE="$(mktemp -d "$CACHE_BASE/.source.XXXXXX")"
+    SOURCE_ARCHIVE="$CACHE_BASE/.source.$$.tar.gz"
+    cleanup_source_download() {
+        rm -rf -- "$SOURCE_STAGE"
+        rm -f -- "$SOURCE_ARCHIVE"
+    }
+    trap cleanup_source_download EXIT
+    SOURCE_URL="${SERPANTINUM_PLUS_TARBALL:-https://github.com/${REPO_SLUG}/archive/refs/heads/master.tar.gz}"
+    curl -fsSL "$SOURCE_URL" -o "$SOURCE_ARCHIVE"
+    tar -xzf "$SOURCE_ARCHIVE" --strip-components=1 -C "$SOURCE_STAGE"
+    [[ -f "$SOURCE_STAGE/install/modules/deps.sh" && -d "$SOURCE_STAGE/src" ]] || {
+        echo "The downloaded archive does not contain a Serpantinum source tree." >&2
+        exit 1
+    }
+    rm -rf -- "$SOURCE_CACHE"
+    mv -- "$SOURCE_STAGE" "$SOURCE_CACHE"
+    rm -f -- "$SOURCE_ARCHIVE"
+    trap - EXIT
+    INSTALL_DIR="$SOURCE_CACHE/install"
+    PROJECT_ROOT="$SOURCE_CACHE"
 fi
 
 export SERPANTINUM_DIR="$PROJECT_ROOT/src"
 export I18N_DIR="$PROJECT_ROOT/src/assets/languages"
 
+if [[ "${SERPANTINUM_INSTALLER_PREFLIGHT:-0}" == 1 ]]; then
+    printf 'Preflight OK: repo=%s\nsource=%s\ninstaller=%s\n' "$REPO_SLUG" "$PROJECT_ROOT" "$INSTALL_DIR"
+    exit 0
+fi
+
 MODULES_DIR="$INSTALL_DIR/modules"
 
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/scripts/i18n.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/deps.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/state.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/migrate.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/deploy.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/version.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/config.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/service.sh"
+# shellcheck disable=SC1091
 source "$MODULES_DIR/ui.sh"
 
 TELEMETRY_ID=$(get_telemetry_id)
@@ -93,7 +119,15 @@ if [[ "$INSTALL_STATE" == "legacy" || "$INSTALL_STATE" == "fresh" || "$IS_REINST
 fi
 
 if [ -f "$MODULES_DIR/telemetry.sh" ]; then
-    bash "$MODULES_DIR/telemetry.sh" --mode done --version "$TARGET_VERSION" --old-version "$OLD_VERSION" --install-state "$INSTALL_STATE" --compositor "${SELECTED_COMPOSITORS[*]}" --id "$TELEMETRY_ID" --enabled "$ENABLE_TELEMETRY" --failed "${FAILED_PKGS[*]}"
+    bash "$MODULES_DIR/telemetry.sh" --mode "done" --version "$TARGET_VERSION" --old-version "$OLD_VERSION" --install-state "$INSTALL_STATE" --compositor "${SELECTED_COMPOSITORS[*]}" --id "$TELEMETRY_ID" --enabled "$ENABLE_TELEMETRY" --failed "${FAILED_PKGS[*]}"
 fi
 
 draw_completion_screen "$TARGET_VERSION" "$TARGET_COMMIT"
+
+if command -v serpantinumd &>/dev/null; then
+    serpantinumd start
+elif [[ -x "$HOME/.local/bin/serpantinumd" ]]; then
+    "$HOME/.local/bin/serpantinumd" start
+else
+    echo "Installation completed, but serpantinumd was not found; start the shell manually." >&2
+fi
