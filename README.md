@@ -12,8 +12,9 @@
 
 | | |
 |---|---|
-| ![Preview 1](docs/assets/previews/preview_1.png) | ![Preview 2](docs/assets/previews/preview_2.png) |
-| ![Preview 3](docs/assets/previews/preview_3.png) | ![Preview 4](docs/assets/previews/preview_4.png) |
+| ![Window overview](docs/assets/previews/preview_1.png) | ![YouTube downloader](docs/assets/previews/preview_2.png) |
+| ![Music player](docs/assets/previews/preview_3.png) | ![Drop Shelf](docs/assets/previews/preview_4.png) |
+| ![Snake game](docs/assets/previews/preview_5.png) | |
 
 ---
 
