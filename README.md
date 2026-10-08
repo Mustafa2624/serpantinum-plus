@@ -44,10 +44,10 @@ bash custom/install-addons.sh             # install and restart
   <tr>
     <td align="center"><img src="docs/screenshots/video-downloader.png" width="300" alt="Video downloader"><br><b>Video downloader</b><br><sub>Video, audio, playlists and transcripts via yt-dlp</sub></td>
     <td align="center"><img src="docs/screenshots/expose-overview.jpg" width="300" alt="Expose overview"><br><b>Expose overview</b><br><sub>All windows from every workspace, macOS style</sub></td>
+    <td align="center"><img src="docs/screenshots/system-info.png" width="300" alt="System Info bar showing CPU, memory and temperature"><br><b>System Info</b><br><sub>CPU, RAM and temperature; click to open btop</sub></td>
   </tr>
 </table>
 
-The **System Info** bar module shows CPU load, memory use, and temperature; click it to open `btop`.
 
 ### In Quickactions
 
@@ -58,6 +58,21 @@ The **System Info** bar module shows CPU load, memory use, and temperature; clic
     <td align="center"><img src="docs/screenshots/snake-game.jpg" width="300" alt="Snake"><br><b>Snake</b><br><sub>A quick game in the Quickactions switcher</sub></td>
   </tr>
 </table>
+
+### Quickactions shortcuts
+
+| Action | Shortcut |
+| --- | --- |
+| Open or close Quickactions | `mainMod + Shift + Less` (usually `Super + Shift + <`) |
+| Previous / next section | `Alt + Home` / `Alt + End` |
+| Collapse / expand the selected panel | `Alt + Prior` / `Alt + Next` (`Prior`/`Next` are Page Up/Page Down) |
+| Move the Quickactions edge backward / forward around the screen | `Alt + Ctrl + Page Down` / `Alt + Ctrl + Page Up` |
+
+The video shows the Quickactions layout and its edge movement:
+
+<video controls width="720" src="docs/videos/quickactions-shortcuts.mp4"></video>
+
+[Open or download the Quickactions shortcuts video](docs/videos/quickactions-shortcuts.mp4).
 
 ## Setup
 
