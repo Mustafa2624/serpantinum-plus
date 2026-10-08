@@ -141,7 +141,7 @@ if [[ "${SERPANTINUM_ADDONS_BOOTSTRAPPED:-0}" != 1 ]]; then
     run_step 'Checking your Serpantinum install...' 'No files were changed.' 'Checking...' check_target
 fi
 
-if [[ ! -f "$source_dir/patches/addons.patch" || ! -f "$source_dir/patches/quickactions-compat.patch" || ! -f "$source_dir/patches/workspace-fixes.patch" || ! -d "$source_dir/overlay/src" ]]; then
+if [[ ! -f "$source_dir/patches/addons.patch" || ! -f "$source_dir/patches/quickactions-compat.patch" || ! -f "$source_dir/patches/workspace-fixes.patch" || ! -f "$source_dir/patches/music-lifecycle.patch" || ! -d "$source_dir/overlay/src" ]]; then
     if ! bootstrap_dir="$(mktemp -d "${TMPDIR:-/tmp}/serpantinum-plus-addons.XXXXXX")"; then
         printf 'Step 2 failed: could not create a temporary download directory. Nothing was changed.\n' >&2
         exit 1
@@ -156,7 +156,7 @@ if [[ ! -f "$source_dir/patches/addons.patch" || ! -f "$source_dir/patches/quick
         tar -xzf "$bootstrap_dir/repo.tar.gz" --strip-components=1 -C "$bootstrap_dir/extracted"
     }
     run_step 'Unpacking...' 'Nothing was changed.' 'Unpacking...' unpack_bootstrap
-    if [[ ! -f "$bootstrap_dir/extracted/custom/patches/addons.patch" ]]; then
+    if [[ ! -f "$bootstrap_dir/extracted/custom/patches/addons.patch" || ! -f "$bootstrap_dir/extracted/custom/patches/music-lifecycle.patch" ]]; then
         printf 'Step 3 failed: archive is missing add-on installer files. Nothing was changed.\n' >&2
         exit 1
     fi
@@ -172,17 +172,20 @@ fi
 patch_file="$source_dir/patches/addons.patch"
 compat_patch_file="$source_dir/patches/quickactions-compat.patch"
 workspace_patch_file="$source_dir/patches/workspace-fixes.patch"
+music_lifecycle_patch_file="$source_dir/patches/music-lifecycle.patch"
 overlay_dir="$source_dir/overlay"
 patch_action=apply
 compat_patch_action=apply
 workspace_patch_action=apply
+music_lifecycle_patch_action=apply
 legacy_music_registered=false
 
 state_root="$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/serpantinum-plus-addons")"
 active_file="$state_root/active-backup"
-mapfile -t patch_paths < <({ sed -n 's/^--- a\///p' "$patch_file"; sed -n 's/^--- a\///p' "$compat_patch_file"; sed -n 's/^--- a\///p' "$workspace_patch_file"; } | sort -u)
+mapfile -t patch_paths < <({ sed -n 's/^--- a\///p' "$patch_file"; sed -n 's/^--- a\///p' "$compat_patch_file"; sed -n 's/^--- a\///p' "$workspace_patch_file"; sed -n 's/^--- a\///p' "$music_lifecycle_patch_file"; } | sort -u)
 mapfile -t compat_patch_paths < <(sed -n 's/^--- a\///p' "$compat_patch_file" | sort -u)
 mapfile -t workspace_patch_paths < <(sed -n 's/^--- a\///p' "$workspace_patch_file" | sort -u)
+mapfile -t music_lifecycle_patch_paths < <(sed -n 's/^--- a\///p' "$music_lifecycle_patch_file" | sort -u)
 mapfile -t overlay_paths < <(cd "$overlay_dir" && find src -type f -print | sort)
 
 report_dependencies() {
@@ -230,6 +233,8 @@ is_complete() {
     grep -Fq 'target: "quickactions"' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'function shortcutToggle()' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'function moveOpenedLayout(step)' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
+    grep -Fq 'property bool shouldLoad' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
+    grep -Fq 'isMusicModule' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     [[ -n "$keybind_file" ]] && grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file" || return 1
 }
 
@@ -278,6 +283,9 @@ show_group() {
                 if [[ "$workspace_patch_action" == apply ]] && printf '%s\n' "${workspace_patch_paths[@]}" | grep -Fxq -- "$rel"; then
                     file_patch_action=apply
                 fi
+                if [[ "$music_lifecycle_patch_action" == apply ]] && printf '%s\n' "${music_lifecycle_patch_paths[@]}" | grep -Fxq -- "$rel"; then
+                    file_patch_action=apply
+                fi
                 if [[ "$file_patch_action" == present ]]; then
                     printf '  KEEP %s (integration patch already present)\n' "$rel"
                 else
@@ -312,6 +320,11 @@ show_file_plan() {
     show_group 'Workspace overview button:' 'src/quickshell/bar/faces/workspaces/NumbersFace.qml'
     show_group 'System info:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/faces/sysinfo/*'
     show_group 'Quickactions shortcuts:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/singletons/widgetcontrols/FloatingController.qml'
+    if [[ "$music_lifecycle_patch_action" == apply ]]; then
+        printf 'Quickactions music lifecycle: unload the music player when the sidebar closes; keep it alive while the sidebar remains open.\n'
+    else
+        printf 'Quickactions music lifecycle fix is already present.\n'
+    fi
     show_group 'Drop shelf:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/DropShelf.qml'
     show_group 'Snake:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/Game.qml' 'src/quickshell/quickactions/actions/Model.js'
     if [[ "$legacy_music_registered" == true ]]; then
@@ -371,6 +384,18 @@ check_changes() {
         printf 'No files were changed. Review those files or update the add-on patch for this Serpantinum version.\n' >&2
         return 1
     fi
+    if patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$music_lifecycle_patch_file" 2>&1)"; then
+        music_lifecycle_patch_action=apply
+    elif reverse_output="$(patch --batch --reverse --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$music_lifecycle_patch_file" 2>&1)"; then
+        music_lifecycle_patch_action=present
+        printf 'Quickactions music lifecycle fix is already applied; it will be kept.\n'
+    else
+        printf 'The Quickactions music lifecycle patch cannot apply cleanly. No files were changed.\n' >&2
+        printf 'Conflicting file(s):\n' >&2
+        printf '%s\n' "$patch_output" | awk '/^checking file / { print "  " $3 }' >&2
+        printf '%s\n' "$patch_output" >&2
+        return 1
+    fi
     if patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$compat_patch_file" 2>&1)"; then
         compat_patch_action=apply
     elif reverse_output="$(patch --batch --reverse --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$compat_patch_file" 2>&1)"; then
@@ -402,6 +427,9 @@ check_changes() {
         fi
         if [[ "$stage_ok" == true && "$compat_patch_action" == apply ]]; then
             patch --batch --forward --fuzz=0 -p1 -d "$stage_dir" -i "$compat_patch_file" >/dev/null 2>&1 || stage_ok=false
+        fi
+        if [[ "$stage_ok" == true && "$music_lifecycle_patch_action" == apply ]]; then
+            patch --batch --forward --fuzz=0 -p1 -d "$stage_dir" -i "$music_lifecycle_patch_file" >/dev/null 2>&1 || stage_ok=false
         fi
         if [[ "$stage_ok" == true ]] && patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$stage_dir" --dry-run -i "$workspace_patch_file" 2>&1)"; then
             workspace_patch_action=apply
@@ -462,7 +490,7 @@ perform_install() {
     local all_paths=() rel had dest
     local -A seen=()
     local touched_paths=("${overlay_paths[@]}")
-    if [[ "$patch_action" == apply || "$compat_patch_action" == apply || "$workspace_patch_action" == apply ]]; then
+    if [[ "$patch_action" == apply || "$compat_patch_action" == apply || "$workspace_patch_action" == apply || "$music_lifecycle_patch_action" == apply ]]; then
         touched_paths=("${patch_paths[@]}" "${overlay_paths[@]}")
     fi
     if [[ "$legacy_music_registered" == true ]]; then touched_paths+=(src/quickshell/bar/BarModuleRegistry.qml); fi
@@ -527,6 +555,15 @@ perform_install() {
     else
         printf 'Integration patch already present; skipped applying it.\n'
     fi
+    if [[ "$music_lifecycle_patch_action" == apply ]]; then
+        if ! patch --batch --forward --fuzz=0 -p1 -d "$install_dir" -i "$music_lifecycle_patch_file"; then
+            rollback_changes || return 1
+            printf 'Quickactions music lifecycle patch failed; restored all touched files from the operation backup.\n' >&2
+            return 1
+        fi
+    else
+        printf 'Quickactions music lifecycle fix already present; skipped applying it.\n'
+    fi
     if [[ "$legacy_music_registered" == true ]]; then
         if ! python3 - "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" <<'PY'
 from pathlib import Path
@@ -588,11 +625,7 @@ PY
         printf 'Could not record backup state; restored all touched files.\n' >&2
         return 1
     fi
-    if [[ "$patch_action" == apply ]]; then
-        printf 'Installed Serpantinum Plus additions: 3 integration patches and %d files.\n' "${#overlay_paths[@]}"
-    else
-        printf 'Installed Serpantinum Plus additions: kept 3 existing integration patches and added/updated %d files.\n' "${#overlay_paths[@]}"
-    fi
+    printf 'Installed Serpantinum Plus additions; updated %d overlay files.\n' "${#overlay_paths[@]}"
     report_dependencies
 }
 

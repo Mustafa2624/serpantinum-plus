@@ -1,0 +1,33 @@
+--- a/src/quickshell/quickactions/Floating.qml
++++ b/src/quickshell/quickactions/Floating.qml
+@@ -1235,7 +1235,29 @@
+                                 anchors.leftMargin: floatingWidget.s(4)
+                                 anchors.rightMargin: floatingWidget.s(4)
+ 
+-                                visible: index === floatingWidget.activeIndex && floatingWidget.expandProgress > 0.01
++                                property bool isMusicModule:
++                                    String(modelData).endsWith("/Music.qml")
++
++                                // Keep playback alive while the sidebar is open, even
++                                // when its panel is collapsed or another tab is selected.
++                                property bool shouldLoad:
++                                    isMusicModule
++                                        ? floatingWidget.isSidebarVisible
++                                        : (
++                                            index === floatingWidget.activeIndex &&
++                                            floatingWidget.isSidebarVisible &&
++                                            floatingWidget.isExpanded &&
++                                            floatingWidget.expandProgress > 0.01
++                                        )
++
++                                visible:
++                                    index === floatingWidget.activeIndex &&
++                                    floatingWidget.isExpanded &&
++                                    floatingWidget.expandProgress > 0.01
++
++                                active:
++                                    shouldLoad
++
+                                 source: modelData
+                                 asynchronous: false
+ 
