@@ -66,7 +66,7 @@ suppress_tty_sleep() {
 
 check_supported_os() {
     if [ "$EUID" -eq 0 ]; then
-        echo "$(t "installer.os.error_root")" >&2
+        t "installer.os.error_root" >&2
         exit 1
     fi
 
@@ -80,10 +80,10 @@ check_supported_os() {
             fi
         done
 
-        echo "$(t "installer.os.error_unsupported" "os=$DETECTED_OS")"
+        t "installer.os.error_unsupported" "os=$DETECTED_OS"
         exit 1
     else
-        echo "$(t "installer.os.error_not_found")"
+        t "installer.os.error_not_found"
         exit 1
     fi
 }
@@ -114,11 +114,21 @@ bootstrap_installer_deps() {
 
     if ! command -v yay &>/dev/null && ! command -v paru &>/dev/null; then
         local cache_build="${XDG_CACHE_HOME:-"$HOME/.cache"}/serpantinum-yay-bin"
-        rm -rf "$cache_build"
-        mkdir -p "$cache_build"
-        git clone https://aur.archlinux.org/yay-bin.git "$cache_build"
-        (cd "$cache_build" && makepkg -si --noconfirm)
-        rm -rf "$cache_build"
+        local archive_file="${cache_build}.tar.gz"
+        local build_stage
+        build_stage="$(mktemp -d "${cache_build}.XXXXXX")"
+        if ! curl -fsSL https://aur.archlinux.org/cgit/aur.git/snapshot/yay-bin.tar.gz -o "$archive_file" || \
+            ! tar -xzf "$archive_file" --strip-components=1 -C "$build_stage"; then
+            rm -rf -- "$build_stage" "$archive_file"
+            echo "Failed to download yay-bin source archive." >&2
+            return 1
+        fi
+        rm -f -- "$archive_file"
+        if ! (cd "$build_stage" && makepkg -si --noconfirm); then
+            rm -rf -- "$build_stage"
+            return 1
+        fi
+        rm -rf -- "$build_stage"
     fi
 }
 
@@ -139,7 +149,14 @@ install_pkg() {
 
 install_fonts() {
     local target_fonts_dir="$HOME/.local/share/fonts/IosevkaNerdFont"
-    if [ ! -d "$target_fonts_dir" ] || [ -z "$(ls -A "$target_fonts_dir" 2>/dev/null | grep -i "\.ttf")" ]; then
+    local found_font=false
+    for font in "$target_fonts_dir"/*.[tT][tT][fF]; do
+        if [ -f "$font" ]; then
+            found_font=true
+            break
+        fi
+    done
+    if [ ! -d "$target_fonts_dir" ] || [ "$found_font" = false ]; then
         local font_cache="${XDG_CACHE_HOME:-"$HOME/.cache"}/serpantinum-fonts"
         mkdir -p "$font_cache" "$target_fonts_dir"
         echo -e "\n\e[36m[ INFO ]\e[0m Downloading Iosevka Nerd Font..."
