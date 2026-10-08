@@ -61,18 +61,16 @@ bash custom/install-addons.sh             # install and restart
 
 ### Quickactions shortcuts
 
-| Action | Shortcut |
+| Shortcut | Action |
 | --- | --- |
-| Open or close Quickactions | `mainMod + Shift + Less` (usually `Super + Shift + <`) |
-| Previous / next section | `Alt + Home` / `Alt + End` |
-| Collapse / expand the selected panel | `Alt + Prior` / `Alt + Next` (`Prior`/`Next` are Page Up/Page Down) |
-| Move the Quickactions edge backward / forward around the screen | `Alt + Ctrl + Page Down` / `Alt + Ctrl + Page Up` |
+| `mainMod + Shift + Less` | Toggle Quickactions |
+| `Alt + Home` / `Alt + End` | Previous / next section |
+| `Alt + Prior` / `Alt + Next` | Collapse / expand panel |
+| `Alt + Ctrl + Page Up` / `Page Down` | Move panel along screen edges |
 
-The video shows the Quickactions layout and its edge movement:
+`mainMod` is the main modifier configured in Hyprland (often `Super`).
 
-<video controls width="720" src="docs/videos/quickactions-shortcuts.mp4"></video>
-
-[Open or download the Quickactions shortcuts video](docs/videos/quickactions-shortcuts.mp4).
+![Quickactions shortcuts demo](docs/videos/quickactions-shortcuts.gif)
 
 ## Setup
 
