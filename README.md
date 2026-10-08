@@ -12,13 +12,17 @@
 
 ## Install
 
-**Already have Serpantinum?** This repository is for adding the custom modules to an existing install. The installer previews its changes, asks first, backs up files it overwrites, and restarts the shell when it can:
+**Already have Serpantinum?** Run the add-on installer once; no clone or full-shell reinstall is needed.
+
+1. The script checks your shell and previews the files it will add or patch.
+2. Review the list and confirm at `Continue? [y/N]`.
+3. It backs up files before changing them, appends seven Quickactions shortcuts to your Hyprland `keybinds.lua` without removing existing lines, then restarts the shell. The keybind backup is saved with the installer backup.
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus/master/custom/install-addons.sh)
 ```
 
-**Update:** after an official Serpantinum update, rerun this script to add the custom modules again.
+**Update:** after an official Serpantinum update, run the same command again to restore the custom modules and shortcuts.
 
 <details>
 <summary>Prefer to read the script first?</summary>
@@ -27,7 +31,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Mustafa2624/serpantinum-plus
 git clone --depth 1 https://github.com/Mustafa2624/serpantinum-plus.git
 cd serpantinum-plus
 bash custom/install-addons.sh --dry-run   # preview, changes nothing
-bash custom/install-addons.sh             # install
+bash custom/install-addons.sh             # install and restart
 ```
 
 </details>
@@ -39,7 +43,6 @@ bash custom/install-addons.sh             # install
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/video-downloader.png" width="300" alt="Video downloader"><br><b>Video downloader</b><br><sub>Video, audio, playlists and transcripts via yt-dlp</sub></td>
-    <td align="center"><img src="docs/screenshots/music-player.jpg" width="300" alt="Music player"><br><b>Music player</b><br><sub>Local library, seekbar, shuffle, repeat</sub></td>
     <td align="center"><img src="docs/screenshots/expose-overview.jpg" width="300" alt="Expose overview"><br><b>Expose overview</b><br><sub>All windows from every workspace, macOS style</sub></td>
   </tr>
 </table>

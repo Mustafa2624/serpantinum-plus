@@ -1,13 +1,6 @@
 --- a/src/quickshell/bar/BarModuleRegistry.qml
 +++ b/src/quickshell/bar/BarModuleRegistry.qml
-@@ -21,0 +22,21 @@
-+        "music": {
-+            name: "music",
-+            icon: "",
-+            defaultVariant: "default",
-+            horizontalFace: "faces/music/MusicFace.qml",
-+            verticalFace: "faces/music/SideMusicFace.qml"
-+        },
+@@ -21,0 +22,14 @@
 +        "expose": {
 +            name: "expose",
 +            icon: "",

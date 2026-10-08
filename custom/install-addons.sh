@@ -122,6 +122,15 @@ else
     install_dir="$(realpath -m -- "$install_dir")"
     source_dir_target="$install_dir/src"
 fi
+
+keybind_file=""
+for candidate in \
+    "$HOME/.config/hypr/config/keybinds.lua" \
+    "$HOME/.config/hypr/config/keybind.lua" \
+    "$HOME/.config/hypr/keybinds.lua" \
+    "$HOME/.config/hypr/keybind.lua"; do
+    if [[ -f "$candidate" ]]; then keybind_file="$candidate"; break; fi
+done
 check_target() {
     [[ -d "$source_dir_target" ]] || {
         printf 'Serpantinum source directory not found: %s\n' "$source_dir_target" >&2
@@ -167,6 +176,7 @@ overlay_dir="$source_dir/overlay"
 patch_action=apply
 compat_patch_action=apply
 workspace_patch_action=apply
+legacy_music_registered=false
 
 state_root="$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/serpantinum-plus-addons")"
 active_file="$state_root/active-backup"
@@ -205,7 +215,7 @@ restart_shell() {
 
 is_complete() {
     local file
-    grep -Fq 'faces/music/MusicFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
+    if grep -Fq 'faces/music/MusicFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml"; then return 1; fi
     grep -Fq 'faces/expose/ExposeFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
     grep -Fq 'faces/ytdl/YtdlFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
     grep -Fq 'singleton ExposeState' "$source_dir_target/quickshell/bar/qmldir" || return 1
@@ -220,6 +230,37 @@ is_complete() {
     grep -Fq 'target: "quickactions"' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'function shortcutToggle()' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
     grep -Fq 'function moveOpenedLayout(step)' "$source_dir_target/quickshell/quickactions/Floating.qml" || return 1
+    [[ -n "$keybind_file" ]] && grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file" || return 1
+}
+
+keybind_block() {
+    local qs_path="$source_dir_target/quickshell/Shell.qml"
+    python3 - "$qs_path" <<'PY'
+import json, shlex, sys
+target = shlex.quote(sys.argv[1])
+commands = {
+    "toggle": f"qs -p {target} ipc call quickactions toggle",
+    "previousSection": f"qs -p {target} ipc call quickactions previousSection",
+    "nextSection": f"qs -p {target} ipc call quickactions nextSection",
+    "collapse": f"qs -p {target} ipc call quickactions collapse",
+    "expand": f"qs -p {target} ipc call quickactions expand",
+    "moveForward": f"qs -p {target} ipc call quickactions moveForward",
+    "moveBackward": f"qs -p {target} ipc call quickactions moveBackward",
+}
+binds = [
+    ('mainMod .. " + SHIFT + LESS"', 'toggle'),
+    ('"ALT + home"', 'previousSection'),
+    ('"ALT + end"', 'nextSection'),
+    ('"ALT + Prior"', 'collapse'),
+    ('"ALT + Next"', 'expand'),
+    ('"ALT + CTRL + page_up"', 'moveForward'),
+    ('"ALT + CTRL + page_down"', 'moveBackward'),
+]
+print("\n-- SERPANTINUM-PLUS QUICKACTIONS BINDS (managed by add-on installer)")
+for chord, action in binds:
+    print(f"hl.bind({chord}, hl.dsp.exec_cmd({json.dumps(commands[action])}))")
+print("-- END SERPANTINUM-PLUS QUICKACTIONS BINDS")
+PY
 }
 
 show_group() {
@@ -266,16 +307,30 @@ show_group() {
 show_file_plan() {
     printf 'Files to change (existing files are backed up before overwrite):\n'
     show_group 'Downloader:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/faces/ytdl/*'
-    show_group 'Music player:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/bar/faces/music/*' 'src/quickshell/quickactions/actions/Music.qml' 'src/quickshell/quickactions/actions/music/*'
+    show_group 'Music player (Quickactions):' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/Music.qml' 'src/quickshell/quickactions/actions/music/*'
     show_group 'Expose:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/qmldir' 'src/quickshell/bar/ExposeState.qml' 'src/quickshell/bar/faces/expose/*'
     show_group 'Workspace overview button:' 'src/quickshell/bar/faces/workspaces/NumbersFace.qml'
     show_group 'System info:' 'src/quickshell/bar/BarModuleRegistry.qml' 'src/quickshell/bar/faces/sysinfo/*'
     show_group 'Quickactions shortcuts:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/singletons/widgetcontrols/FloatingController.qml'
     show_group 'Drop shelf:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/DropShelf.qml'
     show_group 'Snake:' 'src/quickshell/quickactions/Floating.qml' 'src/quickshell/quickactions/actions/Game.qml' 'src/quickshell/quickactions/actions/Model.js'
+    if [[ "$legacy_music_registered" == true ]]; then
+        printf 'Bar Music cleanup: REMOVE legacy registry entry (backup: %s/files/src/quickshell/bar/BarModuleRegistry.qml)\n' "$backup_dir"
+    fi
+    if [[ -n "$keybind_file" ]]; then
+        if grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file"; then
+            printf 'Quickactions keybinds: KEEP %s (already installed)\n' "$keybind_file"
+        else
+            printf 'Quickactions keybinds: APPEND 7 binds to %s (backup: %s)\n' "$keybind_file" "$keybind_backup"
+        fi
+    fi
 }
 
 check_changes() {
+    if [[ -z "$keybind_file" ]]; then
+        printf 'Could not find a Hyprland config keybinds.lua/keybind.lua file under ~/.config/hypr. No files were changed.\n' >&2
+        return 1
+    fi
     if is_complete; then
         printf 'Serpantinum Plus additions are already present; nothing to do.\n'
         return 2
@@ -288,7 +343,15 @@ check_changes() {
         }
     fi
     local patch_output reverse_output
-    if patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
+    local registry="$source_dir_target/quickshell/bar/BarModuleRegistry.qml"
+    if grep -Fq 'faces/music/MusicFace.qml' "$registry"; then legacy_music_registered=true; fi
+    if [[ "$legacy_music_registered" == true ]] &&
+       grep -Fq 'faces/expose/ExposeFace.qml' "$registry" &&
+       grep -Fq 'faces/ytdl/YtdlFace.qml' "$registry" &&
+       grep -Fq 'singleton ExposeState' "$source_dir_target/quickshell/bar/qmldir"; then
+        patch_action=present
+        printf 'Existing add-on registry detected; it will be kept while removing the old bar music entry.\n'
+    elif patch_output="$(patch --batch --forward --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
         patch_action=apply
     elif reverse_output="$(patch --batch --reverse --fuzz=0 -p1 -d "$install_dir" --dry-run -i "$patch_file" 2>&1)"; then
         patch_action=present
@@ -370,6 +433,7 @@ if is_complete; then
 fi
 run_step 'Checking what will change...' 'No files were changed.' 'Checking...' check_changes
 backup_dir="$state_root/backups/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+keybind_backup="$backup_dir/user-config/${keybind_file#"$HOME"/}"
 printf 'If you continue, the backup will be saved to: %s\n' "$backup_dir"
 show_file_plan
 report_dependencies
@@ -390,12 +454,18 @@ perform_install() {
         printf 'Could not prepare the backup; no install files were changed.\n' >&2
         return 1
     fi
+    if ! mkdir -p -- "$(dirname -- "$keybind_backup")" || ! cp -a -- "$keybind_file" "$keybind_backup"; then
+        rm -rf -- "$backup_dir"
+        printf 'Could not back up %s; no install files were changed.\n' "$keybind_file" >&2
+        return 1
+    fi
     local all_paths=() rel had dest
     local -A seen=()
     local touched_paths=("${overlay_paths[@]}")
     if [[ "$patch_action" == apply || "$compat_patch_action" == apply || "$workspace_patch_action" == apply ]]; then
         touched_paths=("${patch_paths[@]}" "${overlay_paths[@]}")
     fi
+    if [[ "$legacy_music_registered" == true ]]; then touched_paths+=(src/quickshell/bar/BarModuleRegistry.qml); fi
     for rel in "${touched_paths[@]}"; do
         [[ -n "${seen[$rel]:-}" ]] && continue
         seen[$rel]=1
@@ -457,6 +527,25 @@ perform_install() {
     else
         printf 'Integration patch already present; skipped applying it.\n'
     fi
+    if [[ "$legacy_music_registered" == true ]]; then
+        if ! python3 - "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" <<'PY'
+from pathlib import Path
+import re, sys
+p = Path(sys.argv[1])
+s = p.read_text()
+pattern = re.compile(r'(?m)^\s*"music":\s*\{\n\s*name: "music",\n\s*icon: "",\n\s*defaultVariant: "default",\n\s*horizontalFace: "faces/music/MusicFace.qml",\n\s*verticalFace: "faces/music/SideMusicFace.qml"\n\s*\},\n')
+updated, count = pattern.subn('', s, count=1)
+if count != 1:
+    raise SystemExit("recognized old bar music registration was not found exactly")
+p.write_text(updated)
+PY
+        then
+            rollback_changes || return 1
+            printf 'Could not remove the old bar music entry; restored the backup.\n' >&2
+            return 1
+        fi
+        printf 'Removed the legacy Music entry from the bar registry.\n'
+    fi
     if [[ "$compat_patch_action" == apply ]]; then
         if ! patch --batch --forward --fuzz=0 -p1 -d "$install_dir" -i "$compat_patch_file"; then
             rollback_changes || return 1
@@ -480,9 +569,21 @@ perform_install() {
         printf 'Overlay copy failed; restored all touched files from the operation backup.\n' >&2
         return 1
     fi
+    if ! grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file"; then
+        if ! keybind_block >> "$keybind_file"; then
+            cp -a -- "$keybind_backup" "$keybind_file"
+            rollback_changes || return 1
+            printf 'Could not update %s; restored its backup and all add-on files.\n' "$keybind_file" >&2
+            return 1
+        fi
+        printf 'Added 7 Quickactions binds to %s (backup: %s).\n' "$keybind_file" "$keybind_backup"
+    fi
     local active_tmp="$active_file.tmp.$$"
     if ! printf '%s\n' "$backup_dir" > "$active_tmp" || ! mv -- "$active_tmp" "$active_file"; then
         rm -f -- "$active_tmp"
+        if ! grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_backup" 2>/dev/null; then
+            cp -a -- "$keybind_backup" "$keybind_file"
+        fi
         rollback_changes || return 1
         printf 'Could not record backup state; restored all touched files.\n' >&2
         return 1
