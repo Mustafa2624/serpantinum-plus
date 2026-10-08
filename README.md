@@ -1,184 +1,119 @@
-# Serpantinum Plus
-
-A fork of ilyamiro's Serpantinum with extra modules and quality-of-life features, built for Hyprland on Arch Linux.
-
-## What's added
-
-- Video downloader: bar pill and popup powered by yt-dlp
-- Local music player: prev / play-pause / next, repeat and shuffle, seekbar, and a song library
-- Drop shelf in Quickactions: a temporary shelf for dragging and dropping files
-- Snake game in Quickactions: a fourth item in the Quickactions switcher
-- Expose-style window overview: a macOS-inspired button that shows apps from all workspaces
-
 <div align="center">
-  <a href="https://ko-fi.com/ilyamiro">
-    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" />
-  </a>
+  <img src="docs/assets/banner.png" alt="Serpantinum Plus banner" width="850" />
+
+  <h1>Serpantinum Plus</h1>
+  <p>A Hyprland desktop shell fork with handy media tools and quick actions.</p>
+
+  <a href="LICENSE.md"><img alt="AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg"></a>
+  <img alt="Arch Linux" src="https://img.shields.io/badge/platform-Arch%20Linux-1793D1?logo=arch-linux&logoColor=white">
+  <img alt="Hyprland" src="https://img.shields.io/badge/compositor-Hyprland-58E1FF">
+  <img alt="Quickshell" src="https://img.shields.io/badge/shell-Quickshell-7B68EE">
 </div>
 
-<div align="center">
-  <img src="docs/assets/banner.png" alt="Serpantinum" width="850" />
-</div>
+## Contents
 
-## Screenshots
+- [What's new](#whats-new)
+- [Fork vs upstream](#fork-vs-upstream)
+- [Features](#features)
+- [Installation](#installation)
+- [Requirements / Setup](#requirements--setup)
+- [Updating](#updating)
+- [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
 
-| Feature | Screenshot |
-|---|---|
-| **Video downloader** — yt-dlp controls for video, audio, playlists, and transcripts. | ![Video downloader](docs/screenshots/video-downloader.png) |
-| **Expose overview** — windows from all workspaces. | ![Expose overview](docs/screenshots/expose-overview.jpg) |
-| **Local music player** — library and playback controls. | ![Music player](docs/screenshots/music-player.jpg) |
-| **Drop shelf** — a Quickactions panel for dragged files and links. | ![Drop shelf](docs/screenshots/drop-shelf.jpg) |
-| **Snake game** — playable from Quickactions. | ![Snake game](docs/screenshots/snake-game.jpg) |
+## What's new
 
-## Install / update notes
+| Feature | What it does | Where |
+|---|---|---|
+| Video downloader | Download videos, audio, playlists, and transcripts with yt-dlp. | Bar |
+| Music player | Browse a local library and control playback, repeat, shuffle, and seeking. | Bar and Quickactions |
+| Drop shelf | Hold files and links temporarily while dragging and dropping. | Quickactions |
+| Snake | Play Snake from the Quickactions switcher. | Quickactions |
+| Expose overview | Show open windows across workspaces in a macOS-inspired overview. | Bar |
 
-From this fork checkout on Arch Linux, run `REPO_SLUG=Mustafa2624/serpantinum-plus bash install/install.sh`. For an existing install, copy this fork's `src/` into `~/.local/share/serpantinum/src/`. After an upstream update, run `./custom/restore.sh` from this checkout to reapply the customized source. Restart with `serpantinumd stop && serpantinumd start`.
+## Fork vs upstream
 
----
+| | Original Serpantinum | Serpantinum Plus |
+|---|---|---|
+| Core shell and installer | Yes | Based on the original project |
+| Video downloader and music player | — | Added |
+| Quickactions drop shelf and Snake | — | Added |
+| Expose overview across workspaces | — | Added |
+
+## Features
+
+### Video downloader
+
+A bar pill opens yt-dlp controls for video, audio, playlists, and transcripts. It requires `yt-dlp` and `ffmpeg` on `PATH`.
+
+![Video downloader](docs/screenshots/video-downloader.png)
+
+### Music player
+
+Play local music from the bar or Quickactions with a library, seekbar, repeat, shuffle, and previous/play-pause/next controls. Playback uses `mpv`.
+
+![Music player](docs/screenshots/music-player.jpg)
+
+### Drop shelf
+
+Keep files and links in a temporary Quickactions shelf, ready to drag into another app.
+
+![Drop shelf](docs/screenshots/drop-shelf.jpg)
+
+### Snake
+
+Play Snake as an item in the Quickactions switcher.
+
+![Snake game](docs/screenshots/snake-game.jpg)
+
+### Expose overview
+
+Open a macOS-inspired overview from the bar to see and activate windows across all workspaces.
+
+![Expose overview](docs/screenshots/expose-overview.jpg)
 
 ## Installation
 
-> [!IMPORTANT]
-> **Migrating from v1:** All previous configuration will be backed up and unused. Configuration of compositor settings such as monitors, keybinds, and autostart is now up to you, as the project migrated from being dotfiles to being a shell.
+### Path A - Fresh install (whole shell from this fork)
 
-### Arch Linux and its derivatives
+1. Clone this fork and enter the checkout:
 
-For Arch-based distributions (including systemd, OpenRC, and other init systems), run the automated installation script.:
+   ```bash
+   git clone --depth 1 --branch master https://github.com/Mustafa2624/serpantinum-plus.git
+   cd serpantinum-plus
+   ```
 
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ilyamiro/serpantinum/master/install/install.sh)"
+2. Run this fork's installer:
 
-```
+   ```bash
+   REPO_SLUG=Mustafa2624/serpantinum-plus bash install/install.sh
+   ```
 
-> [!NOTE]
-> To update, when or if you recieve a notification about the new version being available, just run the script again and choose "update"
+   The installer uses the checked-out fork source. The original project's installer is documented by the upstream project; the command above installs Serpantinum Plus.
 
----
+3. Restart the shell after installation:
 
-### NixOS
+   ```bash
+   serpantinumd stop && serpantinumd start
+   ```
 
-Serpantinum provides flake outputs, a NixOS module for system dependencies, and a Home Manager module for user configuration and service management.
+### Path B - Already have Serpantinum (install only my additions)
 
-#### 1. Add Flake Input
+1. An add-ons-only installer is **coming soon**. There is currently no supported command that overlays just these additions. `custom/restore.sh` copies the entire fork `src/` tree and is intended to restore the customized shell after an update, not to install only the add-ons onto an existing Serpantinum install.
 
-Add Serpantinum to your `flake.nix`:
+2. Until that installer exists, use Path A for a complete installation from this fork. Do not copy the fork's whole `src/` directory if you need to preserve a different existing Serpantinum source tree.
 
-```nix
-{
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    serpantinum.url = "github:ilyamiro/serpantinum";
-  };
+## Requirements / Setup
 
-  outputs = { self, nixpkgs, serpantinum, ... }: {
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      specialArgs = { inherit serpantinum; };
-      modules = [
-        ./configuration.nix
-        serpantinum.nixosModules.default
-      ];
-    };
-  };
-}
+- Arch Linux or an Arch-based distribution, Hyprland, and Quickshell. The fork installer installs the shell's declared system dependencies.
+- Install `yt-dlp` separately for the video downloader; `ffmpeg` is part of the installer's dependency list.
+- Install `mpv` separately for the local music player; it is not in the installer's dependency list.
+- Clipboard integration uses `wl-paste` and `cliphist`; the installer includes `wl-clipboard` and `cliphist`.
+- The equalizer integration uses EasyEffects, which is included in the installer's dependency list.
 
-```
+### Required autostart
 
-#### 2. configuration.nix
-
-Enable the NixOS module to configure system prerequisites:
-
-```nix
-{
-  programs.serpantinum.enable = true;
-}
-
-```
-
-If you prefer installing the package directly without the system module:
-
-```nix
-{ pkgs, serpantinum, ... }:
-
-{
-  environment.systemPackages = [
-    serpantinum.packages.${pkgs.stdenv.hostPlatform.system}.default
-  ];
-}
-
-```
-
-#### 3. Home Manager Configuration
-
-```nix
-{ serpantinum, ... }:
-
-{
-  imports = [
-    serpantinum.homeManagerModules.default
-  ];
-
-  programs.serpantinum = {
-    enable = true;
-    systemd.enable = true;
-
-    settings = {
-      wallpaperDir = "/home/username/Pictures/Wallpapers";
-
-      general = {
-        language = "en";
-        weatherUnit = "metric";
-        weatherInterval = 30;
-      };
-
-      bar = {
-        position = "top";
-        style = "solid";
-        width = 40;
-        workspaceCount = 10;
-        modules = {
-          left = [ "workspaces" ];
-          center = [ "time" ];
-          right = [ "tray" [ "kb" "wifi" "bt" "vol" "bat" ] ];
-        };
-      };
-
-      theme = {
-        fontFamily = "Adwaita Mono";
-        borderRadius = 12;
-        matugen = true;
-      };
-
-      notifications = {
-        dnd = false;
-        position = "top right";
-        sound = true;
-      };
-    };
-  };
-}
-
-```
-
-#### 4. Updating
-
-Update the flake lockfile and rebuild your system:
-
-```bash
-nix flake update serpantinum
-sudo nixos-rebuild switch --flake .
-
-```
-
-> **Note:** The automatic installer handles compositor integration on standard distributions. On NixOS / Home Manager, you must manually integrate compositor configs.
-> Sample configs, autostart entries, and keybindings for supported window managers and compositors are available in the [compositors](https://github.com/ilyamiro/serpantinum/tree/master/compositors) directory.
-
-
-#### Required autostart
-
-Remember to add clipboard listeners and required services to your compositor's autostart configuration for the clipboard and the equalizer to work properly.
-
-Example on Hyprland:
+Add clipboard listeners and the EasyEffects user service to your compositor's startup configuration. Example on Hyprland:
 
 ```lua
 hl.on("hyprland.start", function()
@@ -186,26 +121,58 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("wl-paste --type image --watch cliphist store")
   hl.exec_cmd("systemctl --user enable --now easyeffects")
 end)
-
 ```
----
 
-## Running
+## Updating
 
-To run the shell, launch `serpantinumd start`
+Run the installer again from this fork checkout to update from Serpantinum Plus. If an official upstream update has replaced customized source files, restore the fork's full `src/` tree from the checkout:
 
----
+```bash
+./custom/restore.sh
+serpantinumd stop && serpantinumd start
+```
+
+`custom/restore.sh` copies all of this fork's `src/` into the installed shell; it is not an add-ons-only overlay.
+
+## Troubleshooting
+
+<details>
+<summary>The video downloader says a dependency is missing</summary>
+
+Install `yt-dlp` and ensure both `yt-dlp` and `ffmpeg` are available on `PATH`, then restart Serpantinum.
+
+</details>
+
+<details>
+<summary>The music player cannot start playback</summary>
+
+Install `mpv`, make sure it is available on `PATH`, and restart Serpantinum.
+
+</details>
+
+<details>
+<summary>Clipboard history or the equalizer is not working</summary>
+
+Check the required autostart commands above. Clipboard history needs `wl-paste` and `cliphist`; the equalizer needs the EasyEffects user service.
+
+</details>
 
 ## Credits
 
-Based on Serpantinum by ilyamiro. Snake game inspired by [jhgundersen/omarchy-snake-plugin](https://github.com/jhgundersen/omarchy-snake-plugin); downloader inspired by [dlpwaters/omarchy-yt-downloader](https://github.com/dlpwaters/omarchy-yt-downloader).
+Serpantinum Plus is based on [Serpantinum by ilyamiro](https://github.com/ilyamiro/serpantinum). Snake is inspired by [jhgundersen/omarchy-snake-plugin](https://github.com/jhgundersen/omarchy-snake-plugin), and the downloader is inspired by [dlpwaters/omarchy-yt-downloader](https://github.com/dlpwaters/omarchy-yt-downloader). Special thanks to Darkall44/Qylock for the material SDDM theme.
 
-* Special thanks to Darkall44/Qylock for providing a gorgeous material SDDM theme!
+[![Support the original author (ilyamiro)](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ilyamiro)
+
+## License
+
+The original Serpantinum code is distributed under the GNU Affero General Public License, version 3 or later; see [LICENSE.md](LICENSE.md). Third-party component terms and attribution for custom additions are listed in [`custom/THIRD_PARTY_NOTICES.md`](custom/THIRD_PARTY_NOTICES.md).
+
+Modified by Mustafa2624, 2026.
 
 <br><br><br>
 
 <div align="center">
-  <h3>Thanks to all contributors</h3>
+  <h3>Upstream contributors</h3>
   <br>
 
   <a href="https://github.com/TheRinder2"><img src="https://avatars.githubusercontent.com/u/48689803?v=4&s=48" width="48" height="48" alt="TheRinder2"></a>
@@ -231,15 +198,4 @@ Based on Serpantinum by ilyamiro. Snake game inspired by [jhgundersen/omarchy-sn
   <a href="https://github.com/zynx-real"><img src="https://avatars.githubusercontent.com/u/320626542?v=4&s=48" width="48" height="48" alt="zynx-real"></a>
 </div>
 
-<br><br>
-
 ---
-
-## License
-
-Copyright (C) 2026 Illia Miroshnichenko
-
-This project is licensed under the GNU Affero General Public License version 3, or (at your option) any later version. See the [LICENSE.md](LICENSE.md) file for the full license text.
-
-The original Serpantinum code retains its AGPL-3.0-or-later license. The Snake game adaptation includes a separate MIT notice in [custom/THIRD_PARTY_NOTICES.md](custom/THIRD_PARTY_NOTICES.md).
-
