@@ -53,9 +53,9 @@ bash custom/install-addons.sh             # install and restart
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/music-player.jpg" width="300" alt="Music player"><br><b>Music player</b><br><sub>Also available from Quickactions</sub></td>
-    <td align="center"><img src="docs/screenshots/drop-shelf.jpg" width="300" alt="Drop shelf"><br><b>Drop shelf</b><br><sub>Hold files and links, drag them out when needed</sub></td>
-    <td align="center"><img src="docs/screenshots/snake-game.jpg" width="300" alt="Snake"><br><b>Snake</b><br><sub>A quick game in the Quickactions switcher</sub></td>
+    <td align="center"><img src="docs/screenshots/music-player.png" width="300" alt="Music player"><br><b>Music player</b><br><sub>Also available from Quickactions</sub></td>
+    <td align="center"><img src="docs/screenshots/drop-shelf.png" width="300" alt="Drop shelf"><br><b>Drop shelf</b><br><sub>Hold files and links, drag them out when needed</sub></td>
+    <td align="center"><img src="docs/screenshots/snake-game.png" width="300" alt="Snake"><br><b>Snake</b><br><sub>A quick game in the Quickactions switcher</sub></td>
   </tr>
 </table>
 
