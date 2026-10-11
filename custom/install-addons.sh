@@ -187,7 +187,7 @@ PY
 patch_bar_registry() {
     local reg="$source_dir_target/quickshell/bar/BarModuleRegistry.qml"
     python3 - "$reg" << 'PY'
-import sys
+import sys, re
 reg = sys.argv[1]
 s = open(reg).read()
 
@@ -219,9 +219,22 @@ if '"ytdl": {' not in s:
         },'''
         s = s.replace(anchor, anchor + ytdl_entry, 1)
 
+# Register sysinfo if not present
+if '"sysinfo": {' not in s:
+    anchor = "property var types: ({"
+    if anchor in s:
+        sysinfo_entry = '''
+        "sysinfo": {
+            name: "System Info",
+            icon: "\uf2db",
+            defaultVariant: "default",
+            horizontalFace: "faces/sysinfo/SysInfoFace.qml",
+            verticalFace: "faces/sysinfo/SideSysInfoFace.qml"
+        },'''
+        s = s.replace(anchor, anchor + sysinfo_entry, 1)
+
 # Remove legacy bar music if bar music exists
 if 'faces/music/MusicFace.qml' in s:
-    import re
     s = re.sub(r'(?m)^\s*"music":\s*\{\n\s*name: "music",\n\s*icon: "",\n\s*defaultVariant: "default",\n\s*horizontalFace: "faces/music/MusicFace.qml",\n\s*verticalFace: "faces/music/SideMusicFace.qml"\n\s*\},\n', '', s)
 
 open(reg, "w").write(s)
@@ -235,7 +248,7 @@ patch_qmldir() {
     fi
 }
 
-patch_floating_tabs() {
+patch_floating() {
     local fl="$source_dir_target/quickshell/quickactions/Floating.qml"
     python3 - "$fl" << 'PY'
 import sys, re
@@ -243,6 +256,7 @@ fl = sys.argv[1]
 s = open(fl).read()
 orig = s
 
+# 1. tabModules append
 mods = ["actions/Game.qml", "actions/DropShelf.qml", "actions/Music.qml"]
 for mod in mods:
     if f'"{mod}"' not in s:
@@ -254,7 +268,7 @@ for mod in mods:
             body = body + ',\n' + indent + f'"{mod}"'
             s = s[:m.start()] + m.group(1) + body + m.group(3) + s[m.end():]
 
-# getTabInfo icons
+# 2. getTabInfo icons & names
 if 'mod.indexOf("Game")' not in s:
     anchor_info = 'else if (mod.indexOf("Notes") !== -1) {\n                    return { name: I18n.t("quickactions.tabs.notes"), icon: "󰈙" };\n                }'
     custom_tabs = '''else if (mod.indexOf("Notes") !== -1) {
@@ -269,7 +283,7 @@ if 'mod.indexOf("Game")' not in s:
     if anchor_info in s:
         s = s.replace(anchor_info, custom_tabs, 1)
 
-# Tab fallback
+# 3. Dynamic tab fallback
 if 'let base = mod.replace(' not in s:
     fallback_anchor = 'return { name: I18n.t("quickactions.tabs.tab"), icon: "󰍜" };'
     fallback_code = '''let base = mod.replace(/^.*\\//, "").replace(/\\.qml$/, "");
@@ -277,6 +291,134 @@ if 'let base = mod.replace(' not in s:
                 return { name: I18n.t("quickactions.tabs.tab"), icon: "󰍜" };'''
     if fallback_anchor in s:
         s = s.replace(fallback_anchor, fallback_code, 1)
+
+# 4. IPC handler & layout navigation
+if 'target: "quickactions"' not in s:
+    anchor_widget = 'PanelWindow {\n            id: floatingWidget\n'
+    ipc_code = '''PanelWindow {
+            id: floatingWidget
+
+            function closeQuickActions() {
+                floatingWidget.isPinned = false;
+                floatingWidget.isExpanded = false;
+                floatingWidget.isSidebarVisible = false;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.useGraceTimer = false;
+                hideTimer.stop();
+                peekHideTimer.stop();
+            }
+
+            IpcHandler {
+                target: "quickactions"
+                function toggle() { floatingWidget.shortcutToggle(); }
+                function show() {
+                    let edge = floatingWidget.barPosition === "left" ? "right"
+                        : floatingWidget.barPosition === "right" ? "left" : floatingWidget.activeEdge;
+                    floatingWidget.isPinned = false;
+                    floatingWidget.isExpanded = false;
+                    floatingWidget.showSidebar(edge, floatingWidget.height / 2, false);
+                    floatingWidget.isPinned = true;
+                    floatingWidget.isExpanded = false;
+                    hideTimer.stop();
+                    peekHideTimer.stop();
+                }
+                function hide() { floatingWidget.closeQuickActions(); }
+                function nextSection() {
+                    if (!floatingWidget.isSidebarVisible) return;
+                    let step = floatingWidget.activeEdge === "right" ? -1 : 1;
+                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
+                }
+                function previousSection() {
+                    if (!floatingWidget.isSidebarVisible) return;
+                    let step = floatingWidget.activeEdge === "right" ? 1 : -1;
+                    floatingWidget.activeIndex = Math.max(0, Math.min(floatingWidget.tabCount - 1, floatingWidget.activeIndex + step));
+                }
+                function moveForward() { floatingWidget.moveOpenedLayout(1); }
+                function moveBackward() { floatingWidget.moveOpenedLayout(-1); }
+                function expand() {
+                    if (!floatingWidget.isSidebarVisible) return;
+                    floatingWidget.isExpanded = true;
+                    hideTimer.stop();
+                }
+                function collapse() {
+                    if (!floatingWidget.isSidebarVisible) return;
+                    floatingWidget.isExpanded = false;
+                    hideTimer.stop();
+                }
+            }
+
+            function shortcutToggle() {
+                if (floatingWidget.isSidebarVisible || floatingWidget.isPinned) {
+                    floatingWidget.closeQuickActions();
+                    return;
+                }
+                let edge = floatingWidget.barPosition === "left" ? "right"
+                    : floatingWidget.barPosition === "right" ? "left" : floatingWidget.activeEdge;
+                floatingWidget.isPinned = false;
+                floatingWidget.showSidebar(edge, floatingWidget.height / 2, false);
+                floatingWidget.isPinned = true;
+                floatingWidget.isExpanded = false;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.useGraceTimer = false;
+                hideTimer.stop();
+                peekHideTimer.stop();
+            }
+
+            function moveOpenedLayout(step) {
+                if (!floatingWidget.isSidebarVisible) return;
+                let xSpan = Math.max(1, floatingWidget.rightBound - floatingWidget.leftBound);
+                let ySpan = Math.max(1, floatingWidget.bottomBound - floatingWidget.topBound);
+                let t = 0;
+                if (floatingWidget.activeEdge === "top") {
+                    t = (floatingWidget.currentPos - floatingWidget.leftBound) / xSpan;
+                } else if (floatingWidget.activeEdge === "right") {
+                    t = 1 + (floatingWidget.currentPos - floatingWidget.topBound) / ySpan;
+                } else if (floatingWidget.activeEdge === "bottom") {
+                    t = 2 + (floatingWidget.rightBound - floatingWidget.currentPos) / xSpan;
+                } else if (floatingWidget.activeEdge === "left") {
+                    t = 3 + (floatingWidget.bottomBound - floatingWidget.currentPos) / ySpan;
+                }
+                t = (t % 4 + 4) % 4;
+                t += step * 0.25;
+                t = (t % 4 + 4) % 4;
+                let nextEdge = "";
+                let nextPos = 0;
+                if (t < 1) {
+                    nextEdge = "top"; nextPos = floatingWidget.leftBound + t * xSpan;
+                } else if (t < 2) {
+                    nextEdge = "right"; nextPos = floatingWidget.topBound + (t - 1) * ySpan;
+                } else if (t < 3) {
+                    nextEdge = "bottom"; nextPos = floatingWidget.rightBound - (t - 2) * xSpan;
+                } else {
+                    nextEdge = "left"; nextPos = floatingWidget.bottomBound - (t - 3) * ySpan;
+                }
+                edgeTransitionTimer.stop();
+                teleportTimer.stop();
+                floatingWidget.pendingEdge = "";
+                floatingWidget.pendingPos = 0;
+                floatingWidget.pendingMode = "";
+                floatingWidget.disableAnim = false;
+                floatingWidget.currentPos = nextPos;
+                floatingWidget.activeEdge = nextEdge;
+                floatingWidget.isPeekVisible = false;
+                floatingWidget.isSidebarVisible = true;
+                if (floatingWidget.isPinned) hideTimer.stop();
+                else floatingWidget.kickTimer();
+            }
+'''
+    if anchor_widget in s:
+        s = s.replace(anchor_widget, ipc_code, 1)
+
+# 5. Music lifecycle
+if 'isMusicModule' not in s:
+    loader_anchor = 'visible: index === floatingWidget.activeIndex && floatingWidget.expandProgress > 0.01\n                                source: modelData'
+    music_lifecycle = '''property bool isMusicModule: String(modelData).endsWith("/Music.qml")
+                                property bool shouldLoad: isMusicModule ? floatingWidget.isSidebarVisible : (index === floatingWidget.activeIndex && floatingWidget.isSidebarVisible && floatingWidget.isExpanded && floatingWidget.expandProgress > 0.01)
+                                visible: index === floatingWidget.activeIndex && floatingWidget.isExpanded && floatingWidget.expandProgress > 0.01
+                                active: shouldLoad
+                                source: modelData'''
+    if loader_anchor in s:
+        s = s.replace(loader_anchor, music_lifecycle, 1)
 
 if s != orig:
     open(fl, "w").write(s)
@@ -290,7 +432,7 @@ perform_install() {
     # 2. Dynamic QML/Registry patches
     patch_bar_registry
     patch_qmldir
-    patch_floating_tabs
+    patch_floating
 
     # 3. Version file restoration
     if [[ "$version_metadata_missing" == true && -n "$package_version" && -n "$version_metadata_target" ]]; then
