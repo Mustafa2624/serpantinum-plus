@@ -1,5 +1,5 @@
 import QtQuick
-import "../../../../"
+import "../../../"
 
 // Bare glyph button. All sizes are passed in already scaled (px).
 Item {

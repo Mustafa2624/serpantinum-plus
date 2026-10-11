@@ -131,6 +131,34 @@ for candidate in \
     "$HOME/.config/hypr/keybind.lua"; do
     if [[ -f "$candidate" ]]; then keybind_file="$candidate"; break; fi
 done
+
+version_metadata_missing=false
+version_metadata_target=""
+version_metadata_rel=""
+version_state_file="${QS_STATE_DIR:-$HOME/.local/state/serpantinum}/version"
+package_version=""
+if [[ -r "$version_state_file" ]]; then
+    package_version="$(python3 - "$version_state_file" <<'PY'
+import re, sys
+try:
+    for line in open(sys.argv[1], encoding="utf-8"):
+        match = re.match(r'^SERPANTINUM_VERSION=["\']?([^"\'\s]+)', line)
+        if match:
+            print(match.group(1))
+            break
+except OSError:
+    pass
+PY
+)"
+fi
+if [[ ! -r "$source_dir_target/version.txt" ]]; then
+    version_metadata_missing=true
+    version_metadata_target="$(realpath -m -- "$source_dir_target/version.txt")"
+    case "$version_metadata_target" in
+        "$install_dir"/*) version_metadata_rel="${version_metadata_target#"$install_dir"/}" ;;
+        *) version_metadata_target="" ;;
+    esac
+fi
 check_target() {
     [[ -d "$source_dir_target" ]] || {
         printf 'Serpantinum source directory not found: %s\n' "$source_dir_target" >&2
@@ -218,6 +246,7 @@ restart_shell() {
 
 is_complete() {
     local file
+    [[ "$version_metadata_missing" == false ]] || return 1
     if grep -Fq 'faces/music/MusicFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml"; then return 1; fi
     grep -Fq 'faces/expose/ExposeFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
     grep -Fq 'faces/ytdl/YtdlFace.qml' "$source_dir_target/quickshell/bar/BarModuleRegistry.qml" || return 1
@@ -330,6 +359,10 @@ show_file_plan() {
     if [[ "$legacy_music_registered" == true ]]; then
         printf 'Bar Music cleanup: REMOVE legacy registry entry (backup: %s/files/src/quickshell/bar/BarModuleRegistry.qml)\n' "$backup_dir"
     fi
+    if [[ "$version_metadata_missing" == true && -n "$version_metadata_rel" ]]; then
+        printf 'Version metadata: CREATE %s from your installed version state (backup: %s/files/%s)\n' \
+            "$version_metadata_target" "$backup_dir" "$version_metadata_rel"
+    fi
     if [[ -n "$keybind_file" ]]; then
         if grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file"; then
             printf 'Quickactions keybinds: KEEP %s (already installed)\n' "$keybind_file"
@@ -340,8 +373,16 @@ show_file_plan() {
 }
 
 check_changes() {
+    if [[ "$version_metadata_missing" == true && -z "$version_metadata_rel" ]]; then
+        printf 'The Serpantinum version.txt link points outside the install directory; refusing to write through it. No files were changed.\n' >&2
+        return 1
+    fi
     if [[ -z "$keybind_file" ]]; then
         printf 'Could not find a Hyprland config keybinds.lua/keybind.lua file under ~/.config/hypr. No files were changed.\n' >&2
+        return 1
+    fi
+    if [[ "$version_metadata_missing" == true && -z "$package_version" ]]; then
+        printf 'The install version file is missing and no valid version was found in %s. No files were changed.\n' "$version_state_file" >&2
         return 1
     fi
     if is_complete; then
@@ -494,6 +535,7 @@ perform_install() {
         touched_paths=("${patch_paths[@]}" "${overlay_paths[@]}")
     fi
     if [[ "$legacy_music_registered" == true ]]; then touched_paths+=(src/quickshell/bar/BarModuleRegistry.qml); fi
+    if [[ "$version_metadata_missing" == true ]]; then touched_paths+=("$version_metadata_rel"); fi
     for rel in "${touched_paths[@]}"; do
         [[ -n "${seen[$rel]:-}" ]] && continue
         seen[$rel]=1
@@ -605,6 +647,17 @@ PY
         rollback_changes || return 1
         printf 'Overlay copy failed; restored all touched files from the operation backup.\n' >&2
         return 1
+    fi
+    if [[ "$version_metadata_missing" == true && ! -r "$source_dir_target/version.txt" ]]; then
+        local version_tmp
+        version_tmp="$version_metadata_target.tmp.$$"
+        if ! printf '%s\n' "$package_version" > "$version_tmp" || ! mv -f -- "$version_tmp" "$version_metadata_target"; then
+            rm -f -- "$version_tmp"
+            rollback_changes || return 1
+            printf 'Could not restore version metadata; restored the add-on backup.\n' >&2
+            return 1
+        fi
+        printf 'Restored version metadata at %s (%s).\n' "$version_metadata_target" "$package_version"
     fi
     if ! grep -Fq 'SERPANTINUM-PLUS QUICKACTIONS BINDS' "$keybind_file"; then
         if ! keybind_block >> "$keybind_file"; then
