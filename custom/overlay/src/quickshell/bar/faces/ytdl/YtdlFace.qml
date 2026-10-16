@@ -317,10 +317,10 @@ Item {
     }
 
     // ---------- bar pill ----------
-    property real targetWidth: ((!module || module.moduleActive) && sysLayout.implicitWidth > 0) ? (sysLayout.implicitWidth + px(isCompact ? 8 : 10)) : 0
-    property bool isFaceVisible: showLayout && targetWidth > 0
+    property real targetLength: ((!module || module.moduleActive) && sysLayout.implicitWidth > 0) ? (sysLayout.implicitWidth + px(isCompact ? 8 : 10)) : 0
+    property bool isFaceVisible: showLayout && targetLength > 0
 
-    implicitWidth: targetWidth
+    implicitWidth: targetLength
     implicitHeight: parent ? parent.height : 0
 
     transform: Translate {

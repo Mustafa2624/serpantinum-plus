@@ -67,7 +67,7 @@ Item {
 
     implicitWidth: 0   // button now lives in the workspace pill; this module only hosts the overlay
     implicitHeight: parent ? parent.height : px(30)
-    property real targetWidth: implicitWidth
+    property real targetLength: implicitWidth
     property bool isFaceVisible: moduleActive
 
     // ───────────────────────── bar button ─────────────────────────

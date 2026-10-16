@@ -62,10 +62,10 @@ Item {
         onTriggered: root.showLayout = true
     }
 
-    property real targetWidth: ((!module || module.moduleActive) && mainRow.implicitWidth > 0) ? (mainRow.implicitWidth + horizontalPadding * 2) : 0
-    property bool isFaceVisible: showLayout && targetWidth > 0
+    property real targetLength: ((!module || module.moduleActive) && mainRow.implicitWidth > 0) ? (mainRow.implicitWidth + horizontalPadding * 2) : 0
+    property bool isFaceVisible: showLayout && targetLength > 0
 
-    implicitWidth: targetWidth
+    implicitWidth: targetLength
     implicitHeight: parent ? parent.height : 0
 
     opacity: showLayout ? 1.0 : 0.0

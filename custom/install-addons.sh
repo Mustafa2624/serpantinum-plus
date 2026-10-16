@@ -200,8 +200,7 @@ if '"expose": {' not in s:
             name: "expose",
             icon: "",
             defaultVariant: "default",
-            horizontalFace: "faces/expose/ExposeFace.qml",
-            verticalFace: "faces/expose/ExposeFace.qml"
+            face: "faces/expose/ExposeFace.qml"
         },'''
         s = s.replace(anchor, anchor + expose_entry, 1)
 
@@ -214,8 +213,7 @@ if '"ytdl": {' not in s:
             name: "ytdl",
             icon: "",
             defaultVariant: "default",
-            horizontalFace: "faces/ytdl/YtdlFace.qml",
-            verticalFace: "faces/ytdl/YtdlFace.qml"
+            face: "faces/ytdl/YtdlFace.qml"
         },'''
         s = s.replace(anchor, anchor + ytdl_entry, 1)
 
@@ -228,14 +226,14 @@ if '"sysinfo": {' not in s:
             name: "System Info",
             icon: "\uf2db",
             defaultVariant: "default",
-            horizontalFace: "faces/sysinfo/SysInfoFace.qml",
-            verticalFace: "faces/sysinfo/SideSysInfoFace.qml"
+            face: "faces/sysinfo/SysInfoFace.qml"
         },'''
         s = s.replace(anchor, anchor + sysinfo_entry, 1)
 
 # Remove legacy bar music if bar music exists
 if 'faces/music/MusicFace.qml' in s:
     s = re.sub(r'(?m)^\s*"music":\s*\{\n\s*name: "music",\n\s*icon: "",\n\s*defaultVariant: "default",\n\s*horizontalFace: "faces/music/MusicFace.qml",\n\s*verticalFace: "faces/music/SideMusicFace.qml"\n\s*\},\n', '', s)
+    s = re.sub(r'(?m)^\s*"music":\s*\{\n\s*name: "music",\n\s*icon: "",\n\s*defaultVariant: "default",\n\s*face: "faces/music/MusicFace.qml"\n\s*\},\n', '', s)
 
 open(reg, "w").write(s)
 PY
