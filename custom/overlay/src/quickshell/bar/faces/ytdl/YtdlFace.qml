@@ -317,20 +317,25 @@ Item {
     }
 
     // ---------- bar pill ----------
+    readonly property var activeTarget: widget || module
+    property string orientation: (activeTarget && activeTarget.orientation !== undefined) ? activeTarget.orientation : "horizontal"
+    readonly property bool isVertical: orientation === "vertical"
+
     property real targetLength: ((!module || module.moduleActive) && sysLayout.implicitWidth > 0) ? (sysLayout.implicitWidth + px(isCompact ? 8 : 10)) : 0
     property bool isFaceVisible: showLayout && targetLength > 0
 
-    implicitWidth: targetLength
-    implicitHeight: parent ? parent.height : 0
+    implicitWidth: isVertical ? (parent ? parent.width : 0) : targetLength
+    implicitHeight: isVertical ? targetLength : (parent ? parent.height : 0)
 
     transform: Translate {
         x: root.showLayout ? 0 : root.px(60)
         Behavior on x { NumberAnimation { duration: 800; easing.type: Easing.OutQuint } }
     }
 
-    Row {
+    AxisFlow {
         id: sysLayout
         anchors.centerIn: parent
+        vertical: root.isVertical
         property int pillHeight: root.px(root.isCompact ? 28 : 30)
 
         Rectangle {

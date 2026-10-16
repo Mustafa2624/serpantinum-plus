@@ -62,11 +62,19 @@ Item {
         onTriggered: root.showLayout = true
     }
 
-    property real targetLength: ((!module || module.moduleActive) && mainRow.implicitWidth > 0) ? (mainRow.implicitWidth + horizontalPadding * 2) : 0
+    readonly property var activeTarget: widget || module
+    property string orientation: (activeTarget && activeTarget.orientation !== undefined) ? activeTarget.orientation : "horizontal"
+    readonly property bool isVertical: orientation === "vertical"
+
+    property real targetLength: {
+        if (!module || !module.moduleActive) return 0;
+        let len = root.isVertical ? mainRow.implicitHeight : mainRow.implicitWidth;
+        return (len > 0) ? (len + horizontalPadding * 2) : 0;
+    }
     property bool isFaceVisible: showLayout && targetLength > 0
 
-    implicitWidth: targetLength
-    implicitHeight: parent ? parent.height : 0
+    implicitWidth: isVertical ? (parent ? parent.width : 0) : targetLength
+    implicitHeight: isVertical ? targetLength : (parent ? parent.height : 0)
 
     opacity: showLayout ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
@@ -88,15 +96,16 @@ Item {
         }
     }
 
-    component Stat: Row {
+    component Stat: AxisFlow {
         property string value: "--"
         property string label: ""
         property color accent: ThemeBackend.text
         spacing: root.px(root.isCompact ? 3 : 4)
+        vertical: root.isVertical
 
         Text {
             text: parent.value
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             font.family: ThemeBackend.fontFamily
             font.pixelSize: root.px(root.isCompact ? 14 : 15)
             font.weight: Font.Black
@@ -106,7 +115,7 @@ Item {
         }
         Text {
             text: parent.label
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             font.family: ThemeBackend.fontFamily
             font.pixelSize: root.px(root.isCompact ? 7 : 8)
             font.weight: Font.Black
@@ -116,10 +125,11 @@ Item {
         }
     }
 
-    Row {
+    AxisFlow {
         id: mainRow
         anchors.centerIn: parent
         spacing: root.px(root.isCompact ? Math.max(8, root.statSpacing - 4) : root.statSpacing)
+        vertical: root.isVertical
 
         Stat {
             value: root.hasData ? Math.round(root.cpu) + "%" : "--"
