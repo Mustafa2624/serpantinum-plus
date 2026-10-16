@@ -62,15 +62,11 @@ Item {
         onTriggered: root.showLayout = true
     }
 
-    readonly property var activeTarget: widget || module
-    property string orientation: (activeTarget && activeTarget.orientation !== undefined) ? activeTarget.orientation : "horizontal"
-    readonly property bool isVertical: orientation === "vertical"
-
     property real targetLength: ((!module || module.moduleActive) && mainRow.implicitWidth > 0) ? (mainRow.implicitWidth + horizontalPadding * 2) : 0
     property bool isFaceVisible: showLayout && targetLength > 0
 
-    implicitWidth: isVertical ? (parent ? parent.width : 0) : targetLength
-    implicitHeight: isVertical ? targetLength : (parent ? parent.height : 0)
+    implicitWidth: targetLength
+    implicitHeight: parent ? parent.height : 0
 
     opacity: showLayout ? 1.0 : 0.0
     Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }

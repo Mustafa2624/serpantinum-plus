@@ -65,10 +65,6 @@ Item {
         }
     }
 
-    readonly property var activeTarget: widget || module
-    property string orientation: (activeTarget && activeTarget.orientation !== undefined) ? activeTarget.orientation : "horizontal"
-    readonly property bool isVertical: orientation === "vertical"
-
     implicitWidth: 0   // button now lives in the workspace pill; this module only hosts the overlay
     implicitHeight: parent ? parent.height : px(30)
     property real targetLength: implicitWidth
