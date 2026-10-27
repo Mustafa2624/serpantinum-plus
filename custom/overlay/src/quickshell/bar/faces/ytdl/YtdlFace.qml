@@ -44,6 +44,8 @@ Item {
     property bool showLayout: false
 
     property string url: ""
+    property var queue: []
+    property int queueIndex: -1
     property int mode: 0          // 0 video, 1 audio, 2 transcript
     property bool playlist: false
     property var langs: commonLangs
@@ -59,6 +61,11 @@ Item {
     property int flash: 0        // 0 none, 1 done, 2 error
     property bool stopping: false
     property bool finding: false
+    property bool findingFormats: false
+    property var formats: []
+    property string selectedFormat: ""
+    property string qualityPreset: "best"
+    property bool formatsOpen: false
     property bool pasteAuto: false
     property bool retried: false
     property bool saw403: false
@@ -71,6 +78,15 @@ Item {
     property string lastError: ""
     property string statusText: ""
     property bool statusError: false
+    property var history: []
+    readonly property string historyPath: home + "/.local/state/serpantinum/ytdl/history.json"
+
+    readonly property string selectedFormatLabel: {
+        for (var i = 0; i < formats.length; i++) {
+            if (formats[i].selector === selectedFormat) return formats[i].label
+        }
+        return "Best available"
+    }
 
     readonly property string langLabel: {
         for (var i = 0; i < langs.length; i++) if (langs[i].code === lang) return langs[i].label
@@ -79,6 +95,12 @@ Item {
 
     // ---------- logic ----------
     function setStatus(t, isErr) { statusText = t; statusError = !!isErr }
+
+    function addHistory(status) {
+        var item = { url: url, file: currentFile, mode: ["Video", "Audio", "Transcript"][mode], status: status, time: new Date().toISOString() }
+        history = [item].concat(history).slice(0, 20)
+        Quickshell.execDetached(["bash", "-c", "mkdir -p \"$1\" && printf '%s' \"$2\" > \"$1/history.json\"", "x", home + "/.local/state/serpantinum/ytdl", JSON.stringify(history)])
+    }
 
     function outDir() { return baseDir + "/" + ["Video", "Audio", "Transcript"][mode] }
 
@@ -89,7 +111,8 @@ Item {
         var a = [ytdlpPath, "--newline", "--no-colors", "-o", tmpl]
         a.push(playlist ? "--yes-playlist" : "--no-playlist")
         if (mode === 0) {
-            a.push("-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[vcodec^=avc1][ext=mp4]/bv*+ba/b",
+            var preset = qualityPreset === "1080" ? "bv*[height<=1080]+bestaudio/best" : qualityPreset === "720" ? "bv*[height<=720]+bestaudio/best" : qualityPreset === "small" ? "bv*[height<=480][vcodec!=none]+ba[acodec!=none]/best[height<=480]" : "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[vcodec^=avc1][ext=mp4]/bv*+ba/b"
+            a.push("-f", selectedFormat !== "" ? selectedFormat : preset,
                    "--merge-output-format", "mp4")
         } else if (mode === 1) {
             a.push("-x", "--audio-format", "mp3", "--audio-quality", "0")
@@ -105,6 +128,14 @@ Item {
     function isUrl(t) { return /^https?:\/\//i.test(t) }
 
     function recheckDeps() { depsProc.running = false; depsProc.running = true }
+
+    function enqueue() {
+        var u = url.trim()
+        if (!isUrl(u)) { setStatus("Paste a full http(s) link", true); return }
+        queue = queue.concat([{ url: u, mode: mode, playlist: playlist }])
+        setStatus(queue.length + " item(s) queued", false)
+        url = ""
+    }
 
     function start() {
         var u = url.trim()
@@ -162,6 +193,16 @@ Item {
         if (/^ERROR:/.test(line)) lastError = line.replace(/^ERROR:\s*/, "")
     }
 
+    function startQueue() {
+        if (busy || queue.length === 0) return
+        var item = queue[0]
+        queue = queue.slice(1)
+        url = item.url
+        mode = item.mode
+        playlist = item.playlist
+        start()
+    }
+
     function finished(code) {
         if (stopping) {
             stopping = false; busy = false
@@ -172,6 +213,8 @@ Item {
             busy = false; percent = 100
             flash = 1; flashTimer.restart()
             setStatus("Done" + (currentFile !== "" ? ": " + currentFile : ""), false)
+            addHistory("done")
+            if (queue.length > 0) Qt.callLater(startQueue)
             Quickshell.execDetached(["notify-send", "YT Downloader", "Finished: " + (currentFile !== "" ? currentFile : url)])
             return
         }
@@ -183,6 +226,7 @@ Item {
         }
         busy = false
         flash = 2
+        addHistory("failed")
         setStatus(lastError !== "" ? lastError : "Failed (exit " + code + ")", true)
     }
 
@@ -190,6 +234,52 @@ Item {
         pasteAuto = !!auto
         pasteProc.running = false
         pasteProc.running = true
+    }
+
+    function findFormats() {
+        var u = url.trim()
+        if (findingFormats) return
+        if (!isUrl(u)) { setStatus("Paste a link first", true); return }
+        if (!depsOk) { setStatus("Missing: " + missingTools, true); return }
+        findingFormats = true
+        setStatus("Looking up formats...", false)
+        formatProc.command = [ytdlpPath, "--skip-download", "--no-playlist", "--no-warnings", "--dump-single-json", "--", u]
+        formatProc.running = true
+    }
+
+    function formatSize(bytes) {
+        if (!bytes) return "size ?"
+        if (bytes > 1073741824) return (bytes / 1073741824).toFixed(1) + " GB"
+        return (bytes / 1048576).toFixed(0) + " MB"
+    }
+
+    function parseFormats(txt) {
+        findingFormats = false
+        try {
+            var j = JSON.parse(txt)
+            var out = []
+            var fs = j.formats || []
+            for (var i = 0; i < fs.length; i++) {
+                var f = fs[i]
+                if (!f.format_id || !f.vcodec || f.vcodec === "none" || !f.height) continue
+                if (f.ext !== "mp4" && f.ext !== "webm" && f.ext !== "mkv") continue
+                var selector = String(f.format_id)
+                if (!f.acodec || f.acodec === "none") selector += "+bestaudio/best"
+                out.push({
+                    id: String(f.format_id),
+                    selector: selector,
+                    height: Number(f.height),
+                    label: (f.height || "?") + "p " + (f.fps ? Math.round(f.fps) + "fps " : "") + f.ext.toUpperCase() + " " + formatSize(f.filesize || f.filesize_approx)
+                })
+            }
+            out.sort(function(a, b) { return parseInt(b.label) - parseInt(a.label) })
+            var seen = {}
+            formats = out.filter(function(f) { if (seen[f.label]) return false; seen[f.label] = true; return true }).slice(0, 8)
+            selectedFormat = formats.length ? formats[0].id : ""
+            setStatus(formats.length ? formats.length + " formats found" : "No video formats found", !formats.length)
+        } catch (e) {
+            setStatus("Could not read formats", true)
+        }
     }
 
     function findLanguages() {
@@ -234,7 +324,7 @@ Item {
     function placePopup() {
         if (!barWindow) return
         var p = root.mapToItem(null, 0, 0)
-        var w = px(360)
+        var w = px(650)
         var x = Math.round(p.x + root.width / 2 - w / 2)
         popupX = Math.max(px(8), Math.min(x, barWindow.width - w - px(8)))
         popupY = barWindow.height + px(4)
@@ -250,7 +340,10 @@ Item {
 
     onOpenChanged: { if (open) focusTimer.restart() }
 
-    Component.onCompleted: recheckDeps()
+    Component.onCompleted: {
+        recheckDeps()
+        historyFile.reload()
+    }
 
     // ---------- processes ----------
     Process {
@@ -259,6 +352,32 @@ Item {
         stdout: SplitParser { onRead: data => root.handleLine(data) }
         stderr: SplitParser { onRead: data => root.handleErr(data) }
         onExited: exitCode => root.finished(exitCode)
+    }
+
+    Process {
+        id: historyDirProc
+        command: ["mkdir", "-p", home + "/.local/state/serpantinum"]
+        running: true
+    }
+
+    FileView {
+        id: historyFile
+        path: root.historyPath
+        watchChanges: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: {
+            try { root.history = JSON.parse(text()) || [] } catch (e) { root.history = [] }
+        }
+        onLoadFailed: root.history = []
+        onFileChanged: reload()
+    }
+
+    Process {
+        id: formatProc
+        environment: ({ "PATH": root.fullPath })
+        stdout: StdioCollector { onStreamFinished: root.parseFormats(this.text) }
+        onExited: root.findingFormats = false
     }
 
     Process {
@@ -316,6 +435,17 @@ Item {
         onTriggered: root.showLayout = true
     }
 
+    FontLoader {
+        id: clockFontLoader
+        source: (typeof Caching !== "undefined" && Caching.serpantinumDir && Caching.serpantinumDir !== "")
+            ? ("file://" + Caching.serpantinumDir + "/assets/fonts/GoogleSansFlex.ttf")
+            : Qt.resolvedUrl("../../../../assets/fonts/GoogleSansFlex.ttf")
+    }
+
+    readonly property string clockFont: clockFontLoader.status === FontLoader.Ready && clockFontLoader.name !== ""
+        ? clockFontLoader.name
+        : ThemeBackend.fontFamily
+
     // ---------- bar pill ----------
     readonly property var activeTarget: widget || module
     property string orientation: (activeTarget && activeTarget.orientation !== undefined) ? activeTarget.orientation : "horizontal"
@@ -370,10 +500,10 @@ Item {
                     visible: root.busy
                     anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(root.percent) + "%"
-                    font.family: ThemeBackend.fontFamily
+                    font.family: root.clockFont
                     font.pixelSize: root.px(root.isCompact ? 11 : 12)
-                    font.weight: Font.Black
-                    font.bold: true
+                    font.weight: Font.Bold
+                    font.variableAxes: ({ "wght": 400, "ROND": 100, "wdth": 100 })
                     color: ThemeBackend.base
                 }
             }
@@ -454,8 +584,8 @@ Item {
         anchor.rect.y: root.popupY
         visible: root.open && root.barWindow !== null
         color: "transparent"
-        implicitWidth: root.px(360)
-        implicitHeight: col.implicitHeight + root.px(28)
+        implicitWidth: root.px(650)
+        implicitHeight: Math.max(root.px(150), col.implicitHeight + root.px(28))
 
         Rectangle {
             id: panel
@@ -536,6 +666,75 @@ Item {
                     Btn { width: (col.width - root.px(12)) / 3; label: "Transcript"; selected: root.mode === 2; onClicked: root.mode = 2 }
                 }
 
+                Row {
+                    visible: root.mode === 0
+                    width: col.width
+                    spacing: root.px(6)
+                    Btn { width: (parent.width - root.px(18)) / 4; label: "Best"; selected: root.qualityPreset === "best" && root.selectedFormat === ""; onClicked: { root.qualityPreset = "best"; root.selectedFormat = "" } }
+                    Btn { width: (parent.width - root.px(18)) / 4; label: "1080p"; selected: root.qualityPreset === "1080" && root.selectedFormat === ""; onClicked: { root.qualityPreset = "1080"; root.selectedFormat = "" } }
+                    Btn { width: (parent.width - root.px(18)) / 4; label: "720p"; selected: root.qualityPreset === "720" && root.selectedFormat === ""; onClicked: { root.qualityPreset = "720"; root.selectedFormat = "" } }
+                    Btn { width: (parent.width - root.px(18)) / 4; label: "Small"; selected: root.qualityPreset === "small" && root.selectedFormat === ""; onClicked: { root.qualityPreset = "small"; root.selectedFormat = "" } }
+                }
+
+                Row {
+                    visible: root.mode === 0
+                    width: col.width
+                    spacing: root.px(6)
+                    Btn {
+                        width: parent.width - formatBtn.width - root.px(6)
+                        label: root.formats.length ? (root.formatsOpen ? "Hide formats" : "Format: " + root.selectedFormatLabel) : "Format: Best"
+                        selected: root.formatsOpen
+                        onClicked: {
+                            if (!root.formats.length) root.findFormats()
+                            else root.formatsOpen = !root.formatsOpen
+                        }
+                    }
+                    Btn {
+                        id: formatBtn
+                        width: root.px(120)
+                        label: root.findingFormats ? "Finding..." : "Formats"
+                        active: !root.findingFormats
+                        onClicked: root.findFormats()
+                    }
+                }
+
+                Rectangle {
+                    visible: root.mode === 0 && root.formatsOpen && root.formats.length > 0
+                    width: col.width
+                    height: Math.min(root.px(160), root.formats.length * root.px(28))
+                    radius: root.px(8)
+                    color: ThemeBackend.surface0
+                    clip: true
+
+                    ListView {
+                        anchors.fill: parent
+                        model: root.formats
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: ListView.view.width
+                            height: root.px(28)
+                            color: modelData.id === root.selectedFormat ? ThemeBackend.surface1 : "transparent"
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: root.px(10)
+                                text: modelData.label
+                                font.family: root.clockFont
+                                font.pixelSize: root.px(11)
+                                font.weight: Font.Normal
+                                color: modelData.id === root.selectedFormat ? ThemeBackend.mauve : ThemeBackend.text
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    root.selectedFormat = modelData.id
+                                    root.formatsOpen = false
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Column {
                     visible: root.mode === 2
                     width: col.width
@@ -597,6 +796,38 @@ Item {
                     }
                 }
 
+                Column {
+                    width: col.width
+                    spacing: root.px(4)
+                    Text {
+                        text: "Recent downloads"
+                        font.family: root.clockFont
+                        font.pixelSize: root.px(12)
+                        font.weight: Font.Bold
+                        color: ThemeBackend.subtext0
+                    }
+                    Repeater {
+                        model: root.history.slice(0, 3)
+                        delegate: Text {
+                            required property var modelData
+                            width: col.width
+                            text: modelData.status.toUpperCase() + " · " + modelData.mode + " · " + (modelData.file || modelData.url)
+                            elide: Text.ElideMiddle
+                            font.family: root.clockFont
+                            font.pixelSize: root.px(10)
+                            color: modelData.status === "done" ? ThemeBackend.text : ThemeBackend.peach
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.url = modelData.url
+                                    root.mode = modelData.mode === "Audio" ? 1 : modelData.mode === "Transcript" ? 2 : 0
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row {
                     spacing: root.px(8)
 
@@ -633,16 +864,42 @@ Item {
                     width: col.width
                     spacing: root.px(6)
                     Btn {
-                        width: col.width - openBtn.width - root.px(6)
+                        width: (col.width - openBtn.width - queueBtn.width - root.px(12)) / 2
                         primary: true
                         label: root.busy ? "Stop" : "Download"
                         onClicked: root.busy ? root.stop() : root.start()
+                    }
+                    Btn {
+                        id: queueBtn
+                        width: root.px(86)
+                        label: "Queue"
+                        onClicked: root.enqueue()
                     }
                     Btn {
                         id: openBtn
                         width: root.px(110)
                         label: "Open folder"
                         onClicked: root.openFolder()
+                    }
+                }
+
+                Row {
+                    visible: root.queue.length > 0
+                    width: col.width
+                    spacing: root.px(6)
+                    Text {
+                        width: parent.width - queueStartBtn.width
+                        text: root.queue.length + " queued"
+                        font.family: root.clockFont
+                        font.pixelSize: root.px(11)
+                        color: ThemeBackend.subtext0
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Btn {
+                        id: queueStartBtn
+                        width: root.px(110)
+                        label: "Start queue"
+                        onClicked: root.startQueue()
                     }
                 }
 
